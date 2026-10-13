@@ -108,3 +108,4 @@ def test_ai_summarize_feedback():
     assert summary_data["sentiment"] == "Positive"
     assert len(summary_data["key_positives"]) > 0
     assert len(summary_data["areas_for_improvement"]) > 0
+

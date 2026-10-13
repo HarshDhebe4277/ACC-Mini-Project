@@ -54,3 +54,4 @@ async def summarize_event_feedback_with_ai(
         event_title=event.get("title", "Event"),
         feedbacks=feedbacks
     )
+
