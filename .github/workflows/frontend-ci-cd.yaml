@@ -86,3 +86,4 @@ jobs:
             frontend=${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             -n campus-events
           kubectl rollout status deployment/frontend-deployment -n campus-events --timeout=180s
+
