@@ -5,3 +5,4 @@ metadata:
   labels:
     app.kubernetes.io/name: campus-events
     app.kubernetes.io/part-of: campus-event-management-system
+

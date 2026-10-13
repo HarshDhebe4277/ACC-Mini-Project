@@ -48,3 +48,4 @@ spec:
           runAsNonRoot: true
           runAsUser: 1001
           allowPrivilegeEscalation: false
+

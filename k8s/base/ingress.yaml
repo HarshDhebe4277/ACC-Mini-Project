@@ -23,3 +23,4 @@ spec:
             name: frontend-service
             port:
               number: 3000
+

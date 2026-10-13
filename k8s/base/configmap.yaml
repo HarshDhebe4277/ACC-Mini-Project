@@ -10,3 +10,4 @@ data:
   FRONTEND_PORT: "3000"
   CORS_ORIGINS: "https://campus-events.vesit.edu,http://localhost:3000"
   API_V1_STR: "/api/v1"
+
