@@ -227,3 +227,4 @@ async def reject_event(
         "rejection_reason": rejection.rejection_reason
     })
     return updated
+

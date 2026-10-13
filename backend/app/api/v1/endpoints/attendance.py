@@ -77,3 +77,4 @@ async def scan_ticket_attendance(
         marked_at=datetime.fromisoformat(record["marked_at"]),
         attendance_method=AttendanceMethod.QR_SCAN
     )
+

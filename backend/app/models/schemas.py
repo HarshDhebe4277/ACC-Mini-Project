@@ -246,3 +246,4 @@ class EventAttendanceReport(BaseModel):
     total_attended: int
     attendance_rate_percent: float
     attendees: List[AttendanceReportItem]
+

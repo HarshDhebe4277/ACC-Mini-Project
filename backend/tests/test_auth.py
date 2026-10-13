@@ -69,3 +69,4 @@ def test_rbac_forbidden_for_student_on_organizer_endpoint():
     )
     assert response.status_code == 403
     assert "Insufficient permissions" in response.json()["detail"]
+

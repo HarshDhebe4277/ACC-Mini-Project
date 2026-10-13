@@ -9,3 +9,4 @@ router = APIRouter(prefix="/auth", tags=["Authentication & User"])
 async def get_my_profile(current_user: UserPayload = Depends(get_current_user)):
     """Returns the authenticated user's identity, role, and department."""
     return current_user
+

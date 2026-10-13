@@ -79,3 +79,4 @@ class QRService:
 
 
 qr_service = QRService()
+

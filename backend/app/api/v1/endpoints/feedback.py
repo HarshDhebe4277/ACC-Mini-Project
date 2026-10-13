@@ -44,3 +44,4 @@ async def list_feedback_for_event(
 ):
     """Retrieve all feedbacks submitted for an event."""
     return await supabase_service.list_event_feedbacks(event_id)
+

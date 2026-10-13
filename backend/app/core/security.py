@@ -32,3 +32,4 @@ def decode_jwt_token(token: str) -> Dict[str, Any]:
         algorithms=[ALGORITHM],
         options={"verify_aud": False}
     )
+

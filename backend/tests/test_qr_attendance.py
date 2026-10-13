@@ -107,3 +107,4 @@ def test_registration_qr_attendance_and_certificate_flow():
     assert cert_res.headers["content-type"] == "application/pdf"
     assert len(cert_res.content) > 1000
     assert cert_res.content[:4] == b"%PDF"
+

@@ -83,3 +83,4 @@ async def export_attendance_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=Attendance_{report.event_title[:15].replace(' ', '_')}.csv"}
     )
+

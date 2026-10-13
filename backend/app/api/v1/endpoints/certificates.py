@@ -55,3 +55,4 @@ async def download_certificate(
             "Content-Disposition": f"attachment; filename=Certificate_{event_title[:15].replace(' ', '_')}.pdf"
         }
     )
+

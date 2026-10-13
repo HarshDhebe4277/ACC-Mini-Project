@@ -148,3 +148,4 @@ def test_event_rejection_flow():
     rejected = res_reject.json()
     assert rejected["status"] == EventStatus.REJECTED.value
     assert rejected["rejection_reason"] == "Safety hazard and lack of department faculty supervision."
+

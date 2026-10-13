@@ -18,3 +18,4 @@ api_router.include_router(attendance.router)
 api_router.include_router(certificates.router)
 api_router.include_router(reports.router)
 api_router.include_router(feedback.router)
+
