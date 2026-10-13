@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: campus-events
+  labels:
+    app.kubernetes.io/name: campus-events
+    app.kubernetes.io/part-of: campus-event-management-system

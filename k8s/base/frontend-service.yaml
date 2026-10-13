@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: campus-events
+  labels:
+    app: campus-events-frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: campus-events-frontend
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP

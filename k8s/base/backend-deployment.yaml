@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: campus-events
+  labels:
+    app: campus-events-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: campus-events-backend
+  template:
+    metadata:
+      labels:
+        app: campus-events-backend
+    spec:
+      containers:
+      - name: backend
+        image: LOCATION-docker.pkg.dev/PROJECT_ID/campus-events-repo/backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: campus-events-config
+        - secretRef:
+            name: campus-events-secrets
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          allowPrivilegeEscalation: false
