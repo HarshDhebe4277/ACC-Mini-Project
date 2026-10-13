@@ -6,7 +6,8 @@ from app.api.v1.endpoints import (
     attendance,
     certificates,
     reports,
-    feedback
+    feedback,
+    ai_assistant
 )
 
 api_router = APIRouter()
@@ -18,4 +19,4 @@ api_router.include_router(attendance.router)
 api_router.include_router(certificates.router)
 api_router.include_router(reports.router)
 api_router.include_router(feedback.router)
-
+api_router.include_router(ai_assistant.router)
