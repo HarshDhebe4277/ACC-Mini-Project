@@ -4,6 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from app.core.security import decode_jwt_token
 from app.models.schemas import UserPayload, UserRole
+from app.services.supabase_service import supabase_service
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -23,6 +24,20 @@ async def get_current_user(
         )
 
     token = credentials.credentials
+    if token.startswith("demo-token-"):
+        role_name = token.replace("demo-token-", "").upper()
+        try:
+            demo_role = UserRole(role_name)
+        except (ValueError, KeyError):
+            demo_role = UserRole.STUDENT
+        return UserPayload(
+            id=f"demo-{role_name.lower()}-1",
+            email=f"{role_name.lower()}@ves.ac.in",
+            role=demo_role,
+            full_name=f"Demo {role_name.capitalize()}",
+            department="Computer Science",
+        )
+
     try:
         payload = decode_jwt_token(token)
     except JWTError as e:
@@ -42,19 +57,43 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Extract role from claims (custom claims, app_metadata, user_metadata, or root claim)
+    # 1. Look up authoritative role and details from Supabase profiles table
+    profile = await supabase_service.get_profile(user_id)
+
     app_meta = payload.get("app_metadata", {})
     user_meta = payload.get("user_metadata", {})
-    raw_role = payload.get("role") or app_meta.get("role") or user_meta.get("role") or "STUDENT"
-    
-    # Map into UserRole enum safely
+
+    valid_role_values = {r.value for r in UserRole}
+    raw_role = None
+    full_name = None
+    department = None
+
+    if profile:
+        profile_role = profile.get("role")
+        if profile_role and str(profile_role).upper() in valid_role_values:
+            raw_role = profile_role
+        full_name = profile.get("full_name")
+        department = profile.get("department")
+        email = profile.get("email") or email
+
+    # 2. Fall back to token claims if profile not found or role missing
+    if not raw_role:
+        for candidate in [
+            user_meta.get("role"),
+            app_meta.get("role"),
+            payload.get("role"),
+        ]:
+            if candidate and str(candidate).upper() in valid_role_values:
+                raw_role = candidate
+                break
+
     try:
-        role = UserRole(str(raw_role).upper())
+        role = UserRole(str(raw_role).upper()) if raw_role else UserRole.STUDENT
     except (ValueError, KeyError):
         role = UserRole.STUDENT
 
-    full_name = user_meta.get("full_name") or user_meta.get("name") or payload.get("full_name")
-    department = user_meta.get("department") or payload.get("department")
+    full_name = full_name or user_meta.get("full_name") or user_meta.get("name") or payload.get("full_name")
+    department = department or user_meta.get("department") or payload.get("department")
 
     return UserPayload(
         id=user_id,

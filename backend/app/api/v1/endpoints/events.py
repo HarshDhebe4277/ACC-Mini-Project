@@ -27,7 +27,36 @@ async def create_event(
     event_dict["current_capacity"] = 0
     
     created = await supabase_service.create_event(event_dict)
+    await supabase_service.create_audit_log(
+        action="EVENT_CREATED",
+        target_resource="events",
+        resource_id=created.get("id"),
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Draft event '{created.get('title')}' created for {created.get('department')} department."
+    )
     return created
+
+
+def is_same_department(dept1: Optional[str], dept2: Optional[str]) -> bool:
+    if not dept1 or not dept2:
+        return False
+    d1 = dept1.strip().lower()
+    d2 = dept2.strip().lower()
+    if d1 == d2:
+        return True
+    cs_aliases = {"computer science", "computer engineering", "cmpn", "cs", "computer"}
+    if d1 in cs_aliases and d2 in cs_aliases:
+        return True
+    it_aliases = {"information technology", "it", "inft"}
+    if d1 in it_aliases and d2 in it_aliases:
+        return True
+    extc_aliases = {"electronics & telecommunication", "electronics and telecommunication", "extc", "etrx"}
+    if d1 in extc_aliases and d2 in extc_aliases:
+        return True
+    return False
 
 
 @router.get("", response_model=List[EventResponse])
@@ -59,7 +88,7 @@ async def list_events(
         if current_user.role == UserRole.ADMIN:
             filtered.append(ev)
         elif current_user.role == UserRole.FACULTY:
-            if ev_status == EventStatus.APPROVED.value or (current_user.department and ev_dept == current_user.department):
+            if ev_status == EventStatus.APPROVED.value or is_same_department(current_user.department, ev_dept):
                 filtered.append(ev)
         elif current_user.role == UserRole.ORGANIZER:
             if ev_status == EventStatus.APPROVED.value or organizer_id == current_user.id:
@@ -149,6 +178,16 @@ async def submit_event_for_approval(
         "status": EventStatus.SUBMITTED.value,
         "rejection_reason": None
     })
+    await supabase_service.create_audit_log(
+        action="EVENT_SUBMITTED",
+        target_resource="events",
+        resource_id=event_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Event '{event.get('title')}' submitted for faculty and administrative review."
+    )
     return updated
 
 
@@ -169,7 +208,7 @@ async def recommend_event_approval(
         )
 
     if current_user.role == UserRole.FACULTY:
-        if current_user.department and event.get("department") != current_user.department:
+        if current_user.department and not is_same_department(current_user.department, event.get("department")):
             raise HTTPException(
                 status_code=403,
                 detail=f"Faculty can only review events within their department ('{current_user.department}')"
@@ -178,6 +217,16 @@ async def recommend_event_approval(
     updated = await supabase_service.update_event(event_id, {
         "status": EventStatus.FACULTY_RECOMMENDED.value
     })
+    await supabase_service.create_audit_log(
+        action="PROPOSAL_RECOMMENDED",
+        target_resource="events",
+        resource_id=event_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Endorsed technical syllabus alignment for '{event.get('title')}' ({event.get('department')})."
+    )
     return updated
 
 
@@ -201,6 +250,16 @@ async def approve_event(
         "status": EventStatus.APPROVED.value,
         "rejection_reason": None
     })
+    await supabase_service.create_audit_log(
+        action="EVENT_APPROVED",
+        target_resource="events",
+        resource_id=event_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Published to public campus calendar after venue conflict verification for '{event.get('title')}'."
+    )
     return updated
 
 
@@ -216,7 +275,7 @@ async def reject_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     if current_user.role == UserRole.FACULTY:
-        if current_user.department and event.get("department") != current_user.department:
+        if current_user.department and not is_same_department(current_user.department, event.get("department")):
             raise HTTPException(
                 status_code=403,
                 detail="Faculty can only reject events in their own department"
@@ -226,5 +285,15 @@ async def reject_event(
         "status": EventStatus.REJECTED.value,
         "rejection_reason": rejection.rejection_reason
     })
+    await supabase_service.create_audit_log(
+        action="EVENT_REJECTED",
+        target_resource="events",
+        resource_id=event_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Proposal for '{event.get('title')}' rejected. Reason: {rejection.rejection_reason}"
+    )
     return updated
 

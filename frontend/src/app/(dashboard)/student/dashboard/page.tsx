@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, QrCode, Award, ArrowRight, Clock, MapPin } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { EventItem, RegistrationItem } from "@/types";
+import ReactMarkdown from "react-markdown";
 
 export default function StudentDashboard() {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -137,9 +138,18 @@ export default function StudentDashboard() {
                 <CardTitle className="text-lg font-bold text-slate-900 leading-snug">
                   {event.title}
                 </CardTitle>
-                <CardDescription className="line-clamp-2 text-xs mt-1">
-                  {event.description}
-                </CardDescription>
+                <div className="line-clamp-2 text-xs mt-1 text-slate-500">
+                  <ReactMarkdown
+                    components={{
+                      p: ({ ...props }) => <span {...props} />,
+                      h1: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
+                      h2: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
+                      h3: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
+                    }}
+                  >
+                    {event.description}
+                  </ReactMarkdown>
+                </div>
               </CardHeader>
 
               <CardContent className="space-y-2 text-xs text-slate-600 pb-4">

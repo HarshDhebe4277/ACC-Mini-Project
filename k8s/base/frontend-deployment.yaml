@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: LOCATION-docker.pkg.dev/PROJECT_ID/campus-events-repo/frontend:latest
-        imagePullPolicy: Always
+        image: campus-events/frontend:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
           name: http

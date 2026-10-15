@@ -67,6 +67,19 @@ async def scan_ticket_attendance(
         method=AttendanceMethod.QR_SCAN.value
     )
 
+    # 6. Create immutable audit trail
+    venue_info = f" at {event.get('venue_name')}" if event.get("venue_name") else ""
+    await supabase_service.create_audit_log(
+        action="ATTENDANCE_SCANNED",
+        target_resource="attendance",
+        resource_id=reg_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name or "Gate Scanner",
+        actor_role=current_user.role.value,
+        details=f"HMAC ticket verified & checked in{venue_info} for event '{event.get('title')}'."
+    )
+
     return AttendanceScanResponse(
         success=True,
         message="Attendance successfully verified and recorded",

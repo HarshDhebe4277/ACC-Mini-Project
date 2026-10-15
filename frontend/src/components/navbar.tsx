@@ -17,6 +17,7 @@ import {
   Users
 } from "lucide-react";
 import { clearAuthToken } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -42,7 +43,13 @@ export function Navbar() {
     }
   }, [pathname]);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
     clearAuthToken();
     document.cookie = "campus_role=; path=/; max-age=0";
     document.cookie = "campus_token=; path=/; max-age=0";

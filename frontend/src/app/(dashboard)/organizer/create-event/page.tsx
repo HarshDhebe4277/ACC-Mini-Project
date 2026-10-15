@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api-client";
 import { AIDraftResponse } from "@/types";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function CreateEventPage() {
   const [endTime, setEndTime] = useState("2026-11-20T17:00");
   const [deadline, setDeadline] = useState("2026-11-19T23:59");
   const [tags, setTags] = useState<string[]>(["Technical", "Hackathon"]);
+  const [descriptionTab, setDescriptionTab] = useState<"write" | "preview">("write");
 
   const handleApplyDraft = (draft: AIDraftResponse) => {
     setTitle(draft.title);
@@ -119,6 +121,7 @@ export default function CreateEventPage() {
                   className="w-full h-10 px-3 rounded-md border border-slate-300 bg-white text-sm"
                 >
                   <option value="Computer Science">Computer Science</option>
+                  <option value="Computer Engineering">Computer Engineering</option>
                   <option value="Information Technology">Information Technology</option>
                   <option value="Electronics & Telecommunication">Electronics & Telecom</option>
                 </select>
@@ -168,15 +171,67 @@ export default function CreateEventPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Event Description & Agenda</label>
-              <textarea
-                rows={6}
-                placeholder="Markdown formatted overview, eligibility, prizes, and schedule breakdown..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full text-sm p-3 rounded-md border border-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xs"
-                required
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-700">Event Description & Agenda</label>
+                <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-md border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionTab("write")}
+                    className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                      descriptionTab === "write"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Edit Markdown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionTab("preview")}
+                    className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                      descriptionTab === "preview"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    Preview Rendered
+                  </button>
+                </div>
+              </div>
+
+              {descriptionTab === "write" ? (
+                <textarea
+                  rows={8}
+                  placeholder="Markdown formatted overview, eligibility, prizes, and schedule breakdown..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full text-sm p-3 rounded-md border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xs"
+                  required
+                />
+              ) : (
+                <div className="w-full min-h-[180px] max-h-[360px] overflow-y-auto p-4 rounded-md border border-slate-200 bg-slate-50/70 text-slate-900 space-y-2">
+                  {description ? (
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ ...props }) => <h1 className="text-base font-bold text-slate-900 mt-2 mb-1" {...props} />,
+                        h2: ({ ...props }) => <h2 className="text-sm font-bold text-slate-900 mt-2 mb-1 border-b border-slate-200 pb-1" {...props} />,
+                        h3: ({ ...props }) => <h3 className="text-xs font-semibold text-slate-800 mt-1.5 mb-1" {...props} />,
+                        p: ({ ...props }) => <p className="text-xs text-slate-700 mb-2 leading-relaxed" {...props} />,
+                        ul: ({ ...props }) => <ul className="list-disc list-inside text-xs text-slate-700 mb-2 space-y-1" {...props} />,
+                        ol: ({ ...props }) => <ol className="list-decimal list-inside text-xs text-slate-700 mb-2 space-y-1" {...props} />,
+                        li: ({ ...props }) => <li className="text-xs text-slate-700" {...props} />,
+                        strong: ({ ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                        blockquote: ({ ...props }) => <blockquote className="border-l-4 border-purple-400 pl-3 italic text-xs text-slate-600 my-2" {...props} />,
+                        code: ({ ...props }) => <code className="bg-slate-200 text-purple-800 px-1 py-0.5 rounded text-[11px] font-mono" {...props} />,
+                      }}
+                    >
+                      {description}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No description entered yet. Switch to Edit Markdown to add content.</p>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
 

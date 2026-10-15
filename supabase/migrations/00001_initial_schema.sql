@@ -41,22 +41,39 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Trigger to create profile automatically on Supabase OAuth sign-up
+-- Trigger to create profile automatically on Supabase Auth sign-up (Native Email/Password)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    user_role_val public.user_role := 'STUDENT';
+    raw_role text;
 BEGIN
-    INSERT INTO public.profiles (id, email, full_name, avatar_url, role)
+    raw_role := UPPER(COALESCE(new.raw_user_meta_data->>'role', 'STUDENT'));
+    IF raw_role IN ('STUDENT', 'ORGANIZER', 'FACULTY', 'ADMIN') THEN
+        user_role_val := raw_role::public.user_role;
+    END IF;
+
+    INSERT INTO public.profiles (id, email, full_name, department, avatar_url, role)
     VALUES (
         new.id,
         new.email,
-        COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', 'User'),
+        COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+        new.raw_user_meta_data->>'department',
         new.raw_user_meta_data->>'avatar_url',
-        'STUDENT'
+        user_role_val
     )
-    ON CONFLICT (id) DO NOTHING;
+    ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        department = COALESCE(EXCLUDED.department, public.profiles.department),
+        role = EXCLUDED.role,
+        updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created

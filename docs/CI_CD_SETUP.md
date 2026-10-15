@@ -1,6 +1,6 @@
 # CI/CD Setup & GitHub Actions Automation Guide
 
-This guide details the complete Continuous Integration and Continuous Deployment (CI/CD) configuration for the **College Event Management System** deploying to Google Kubernetes Engine (GKE) and Google Cloud Artifact Registry.
+This guide details the complete Continuous Integration and Continuous Deployment (CI/CD) configuration for the **College Event Management System** using **GitHub Container Registry (GHCR)**, **GitHub Actions**, and deployment to **Local Minikube Kubernetes / GKE**.
 
 ---
 
@@ -11,24 +11,22 @@ The repository features two independent, decoupled GitHub Actions workflows unde
 1. **Backend Pipeline (`.github/workflows/backend-ci-cd.yaml`)**:
    - **Triggers**: Pushes to `main` impacting `backend/**`, `k8s/**`, or the workflow file itself.
    - **Quality Gate**: Sets up Python 3.11 and runs the full Pytest test suite (`pytest tests/ -v`).
-   - **Containerization & Deployment**: Builds hardened non-root container image, tags with `$GITHUB_SHA` and `latest`, pushes to GCP Artifact Registry, updates GKE deployment `backend-deployment`, and monitors rolling status.
+   - **Containerization & Publishing**: Builds hardened non-root container image, tags with both `$GITHUB_SHA` and `latest`, and pushes to GitHub Container Registry (`ghcr.io/${{ github.repository }}/backend`).
 
 2. **Frontend Pipeline (`.github/workflows/frontend-ci-cd.yaml`)**:
    - **Triggers**: Pushes to `main` impacting `frontend/**` or the workflow file itself.
    - **Quality Gate**: Runs ESLint, TypeScript compiler type-check (`tsc --noEmit`), and Next.js standalone build verification.
-   - **Containerization & Deployment**: Builds multi-stage standalone Alpine container image, pushes to Artifact Registry, executes rolling update on `frontend-deployment`, and validates pod health.
+   - **Containerization & Publishing**: Builds multi-stage standalone Alpine container image, pushes to GitHub Container Registry (`ghcr.io/${{ github.repository }}/frontend`), and tags with `$GITHUB_SHA` and `latest`.
 
 ---
 
-## 2. Required GitHub Actions Secrets
+## 2. GitHub Actions Secrets Configuration
 
 Navigate to your GitHub repository:  
 **Settings > Secrets and variables > Actions > New repository secret** and register the following:
 
 | Secret Name | Category | Description | Example / Format |
 | :--- | :--- | :--- | :--- |
-| `GCP_PROJECT_ID` | Infrastructure | Google Cloud Project ID | `college-events-prod-2026` |
-| `GCP_SA_KEY` | Authentication | Raw JSON service account key for CI/CD agent | `{"type": "service_account", "project_id": ...}` |
 | `SUPABASE_URL` | Database | Supabase project API endpoint URL | `https://xyzproject.supabase.co` |
 | `SUPABASE_ANON_KEY` | Database | Supabase public anonymous API key | `eyJhbGciOi...` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Database | Privileged service role key (backend bypass) | `eyJhbGciOi...` |
@@ -37,72 +35,57 @@ Navigate to your GitHub repository:
 | `NEXT_PUBLIC_SUPABASE_URL` | Frontend | Supabase public URL (bundled in client) | `https://xyzproject.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Frontend | Supabase public anon key (bundled in client) | `eyJhbGciOi...` |
 
+> [!NOTE]
+> GitHub Container Registry (GHCR) authentication is handled **automatically** by GitHub Actions using the built-in `${{ secrets.GITHUB_TOKEN }}` with `packages: write` permission. No manual Docker Hub or cloud container registry credentials are required.
+
 ---
 
-## 3. Google Cloud Platform (GCP) IAM Setup
+## 3. Deployment Models
 
-To generate the required `GCP_SA_KEY` with least-privilege access, execute the following commands using Cloud Shell or `gcloud`:
+### Model A: Local Minikube Deployment (Free & Offline-Friendly)
+For local evaluation, coursework, and viva demonstrations:
+1. Build images directly inside Minikube's Docker daemon or pull from GHCR:
+   ```powershell
+   # Point Docker CLI to Minikube daemon
+   & minikube -p minikube docker-env --shell powershell | Invoke-Expression
 
-```bash
-# 1. Set environment variables
-export PROJECT_ID="your-gcp-project-id"
-export SA_NAME="github-actions-deployer"
-export REGION="us-central1"
-export REPO_NAME="campus-events-repo"
+   # Build locally
+   docker build -t campus-events/backend:latest ./backend
+   docker build -t campus-events/frontend:latest ./frontend
+   ```
+2. Apply Kubernetes base manifests:
+   ```powershell
+   kubectl apply -k k8s/base
+   ```
+3. Expose via Minikube tunnel and Cloudflare quick tunnel for live HTTPS public access. See [LOCAL_MINIKUBE_CICD_SETUP.md](LOCAL_MINIKUBE_CICD_SETUP.md) for full instructions.
 
-gcloud config set project $PROJECT_ID
-
-# 2. Enable necessary Google APIs
-gcloud services enable \
-    artifactregistry.googleapis.com \
-    container.googleapis.com
-
-# 3. Create Artifact Registry Docker Repository
-gcloud artifacts repositories create $REPO_NAME \
-    --repository-format=docker \
-    --location=$REGION \
-    --description="Docker repository for CampusEvents micro-services"
-
-# 4. Create Service Account for GitHub Actions
-gcloud iam service-accounts create $SA_NAME \
-    --display-name="GitHub Actions GKE Deployment Account"
-
-# 5. Grant minimal required IAM roles
-# Allow pushing container images to Artifact Registry
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
-    --role="roles/artifactregistry.writer"
-
-# Allow deploying and managing pods on GKE cluster
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
-    --role="roles/container.developer"
-
-# 6. Generate and export private JSON key for GitHub Actions
-gcloud iam service-accounts keys create sa-key.json \
-    --iam-account="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-
-# 7. Print JSON content to copy into GitHub secret GCP_SA_KEY
-cat sa-key.json
-```
+### Model B: Self-Hosted Runner Continuous Deployment
+To have GitHub Actions automatically deploy updates to your running local Minikube cluster:
+1. In GitHub Repository: **Settings > Actions > Runners > New self-hosted runner**.
+2. Follow the OS instructions to register your machine as a runner.
+3. Once active, the runner can execute automated rolling updates:
+   ```powershell
+   kubectl set image deployment/backend-deployment backend=ghcr.io/<org-or-user>/<repo>/backend:<commit-sha> -n campus-events
+   kubectl rollout status deployment/backend-deployment -n campus-events --timeout=120s
+   ```
 
 ---
 
 ## 4. Pipeline Safety & Reliability Guarantees
 
 1. **Zero-Failing-Tests Gate**:
-   - The deployment job declares `needs: test` (or `needs: lint-and-typecheck`).
+   - The image build and push job declares `needs: test` (or `needs: lint-and-typecheck`).
    - If any unit test, lint error, or type failure occurs, execution halts immediately; no image is pushed, and no cluster update is triggered.
 2. **Deterministic Version Pinning**:
-   - Every commit produces an immutable image tag: `IMAGE_TAG=.../backend:${GITHUB_SHA}`.
-   - The rolling deployment explicitly specifies the exact commit SHA, ensuring auditable releases.
+   - Every commit produces an immutable image tag: `IMAGE_TAG=ghcr.io/.../backend:${GITHUB_SHA}` as well as `:latest`.
+   - The rolling deployment can explicitly specify the exact commit SHA, ensuring auditable releases.
 3. **Automated Rollout Monitoring**:
    - `kubectl rollout status deployment/... --timeout=180s` monitors pod lifecycle.
-   - If containers fail readiness probes (`/healthz` on backend or port 3000 on frontend), Kubernetes retains previous healthy replica pods and aborts the deployment.
+   - If containers fail readiness probes (`/healthz` on backend or TCP port 3000 on frontend), Kubernetes retains previous healthy replica pods and aborts the deployment.
 
 ---
 
-## 5. Emergency Rollback Instructions
+## 5. Rollback Instructions
 
 If an unexpected production issue arises after deployment, roll back immediately with:
 

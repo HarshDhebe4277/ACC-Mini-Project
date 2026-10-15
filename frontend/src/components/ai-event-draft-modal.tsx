@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, Loader2, Check, X } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { AIDraftResponse } from "@/types";
+import ReactMarkdown from "react-markdown";
 
 interface AIDraftModalProps {
   department: string;
@@ -85,7 +86,7 @@ export function AIDraftModal({ department, onApplyDraft }: AIDraftModalProps) {
                 placeholder="E.g., 36-hour Cloud Native hackathon for 3rd year students with 50,000 INR prize pool, hands-on GKE labs, and industry judges."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                className="w-full text-sm p-3 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full text-sm p-3 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
 
               <div className="flex items-center justify-between">
@@ -132,8 +133,23 @@ export function AIDraftModal({ department, onApplyDraft }: AIDraftModalProps) {
                 <div>
                   <span className="font-semibold text-slate-800">Suggested Capacity:</span> {draft.suggested_capacity} Attendees
                 </div>
-                <div className="whitespace-pre-line text-slate-600 bg-white p-3 rounded border border-slate-200">
-                  {draft.description}
+                <div className="text-slate-700 bg-white p-3 rounded border border-slate-200 text-xs space-y-1.5">
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ ...props }) => <h1 className="text-sm font-bold text-slate-900 mt-1 mb-0.5" {...props} />,
+                      h2: ({ ...props }) => <h2 className="text-xs font-bold text-slate-900 mt-1 mb-0.5 border-b pb-0.5" {...props} />,
+                      h3: ({ ...props }) => <h3 className="text-xs font-semibold text-slate-800 mt-1 mb-0.5" {...props} />,
+                      p: ({ ...props }) => <p className="text-xs text-slate-700 mb-1 leading-relaxed" {...props} />,
+                      ul: ({ ...props }) => <ul className="list-disc list-inside text-xs text-slate-700 mb-1 space-y-0.5" {...props} />,
+                      ol: ({ ...props }) => <ol className="list-decimal list-inside text-xs text-slate-700 mb-1 space-y-0.5" {...props} />,
+                      li: ({ ...props }) => <li className="text-xs text-slate-700" {...props} />,
+                      strong: ({ ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                      blockquote: ({ ...props }) => <blockquote className="border-l-2 border-purple-400 pl-2 italic text-xs text-slate-600 my-1" {...props} />,
+                      code: ({ ...props }) => <code className="bg-slate-100 text-purple-800 px-1 py-0.5 rounded text-[11px] font-mono" {...props} />,
+                    }}
+                  >
+                    {draft.description}
+                  </ReactMarkdown>
                 </div>
               </div>
             )}

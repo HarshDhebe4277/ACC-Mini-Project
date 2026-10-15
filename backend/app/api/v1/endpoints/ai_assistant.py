@@ -21,10 +21,21 @@ async def draft_event_with_ai(
     Transforms rough organizer thoughts into structured event proposals using Mistral AI.
     Secured to Organizers and Administrators.
     """
-    return await mistral_service.generate_event_draft(
+    result = await mistral_service.generate_event_draft(
         rough_prompt=draft_req.rough_prompt.strip(),
         department=draft_req.department.strip()
     )
+    await supabase_service.create_audit_log(
+        action="AI_DRAFT_GENERATED",
+        target_resource="ai_assistant",
+        resource_id=None,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Mistral Large parsed unstructured prompt into formal college draft for '{result.title}'."
+    )
+    return result
 
 
 @router.post("/summarize-feedback/{event_id}", response_model=FeedbackSummaryOutput)

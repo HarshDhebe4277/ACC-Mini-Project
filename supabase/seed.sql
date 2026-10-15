@@ -22,3 +22,12 @@ INSERT INTO public.categories (name, description) VALUES
 ('Social & Community', 'Blood donation camps, tree plantation drives, and social welfare initiatives')
 ON CONFLICT (name) DO NOTHING;
 
+-- Seed Operational Audit Logs
+INSERT INTO public.audit_logs (action, target_resource, resource_id, details, created_at) VALUES
+('EVENT_APPROVED', 'events', 'demo-hackathon-1', '{"message": "Published to public campus calendar after venue conflict verification.", "actor": "Dean Office (admin@ves.ac.in)"}'::jsonb, NOW() - INTERVAL '15 minutes'),
+('ATTENDANCE_SCANNED', 'attendance', 'reg-uuid-99', '{"message": "HMAC ticket verified & checked in at Main Auditorium gate.", "actor": "Gate Scanner (org@ves.ac.in)"}'::jsonb, NOW() - INTERVAL '45 minutes'),
+('PROPOSAL_RECOMMENDED', 'events', 'demo-workshop-2', '{"message": "Endorsed technical syllabus alignment for IT department workshop.", "actor": "Faculty Advisor (sunita.rao@ves.ac.in)"}'::jsonb, NOW() - INTERVAL '120 minutes'),
+('ROLE_ELEVATED', 'profiles', 'u-2', '{"message": "User role transitioned from STUDENT to ORGANIZER.", "actor": "Admin (admin@ves.ac.in)"}'::jsonb, NOW() - INTERVAL '6 hours'),
+('AI_DRAFT_GENERATED', 'ai_assistant', 'draft-req-44', '{"message": "Mistral Large parsed unstructured prompt into formal college draft.", "actor": "Organizer (rohan.mehta@ves.ac.in)"}'::jsonb, NOW() - INTERVAL '8 hours');
+
+

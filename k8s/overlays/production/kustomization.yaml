@@ -12,7 +12,7 @@ labels:
       app.kubernetes.io/managed-by: kustomize
 
 images:
-  - name: LOCATION-docker.pkg.dev/PROJECT_ID/campus-events-repo/backend
+  - name: campus-events/backend
     newTag: production
-  - name: LOCATION-docker.pkg.dev/PROJECT_ID/campus-events-repo/frontend
+  - name: campus-events/frontend
     newTag: production

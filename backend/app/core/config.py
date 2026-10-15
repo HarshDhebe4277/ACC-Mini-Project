@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = "default-anon-key"
     SUPABASE_SERVICE_ROLE_KEY: str = "default-service-role-key"
     SUPABASE_JWT_SECRET: str = "default-jwt-secret-min-32-chars-long-abcdef"
+    DATABASE_URL: Union[str, None] = None
     
     # Mistral AI Configuration
     MISTRAL_API_KEY: str = "dummy-mistral-api-key"

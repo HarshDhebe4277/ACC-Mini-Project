@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, QrCode, BarChart3, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { PlusCircle, QrCode, BarChart3, Clock, CheckCircle2, AlertCircle, Pencil } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { EventItem } from "@/types";
 
@@ -169,13 +169,25 @@ export default function OrganizerDashboard() {
 
                 <div className="flex items-center space-x-2 shrink-0">
                   {event.status === "DRAFT" || event.status === "REJECTED" ? (
-                    <Button
-                      size="sm"
-                      onClick={() => handleSubmitEvent(event.id)}
-                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
-                    >
-                      Submit for Approval
-                    </Button>
+                    <>
+                      <Link href={`/organizer/edit-event/${event.id}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-slate-300 hover:bg-slate-100 text-slate-700 text-xs flex items-center space-x-1"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Edit Event</span>
+                        </Button>
+                      </Link>
+                      <Button
+                        size="sm"
+                        onClick={() => handleSubmitEvent(event.id)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs"
+                      >
+                        Submit for Approval
+                      </Button>
+                    </>
                   ) : null}
 
                   {event.status === "APPROVED" && (

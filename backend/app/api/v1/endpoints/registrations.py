@@ -88,6 +88,17 @@ async def register_for_event(
     created_reg["user_name"] = current_user.full_name
     created_reg["user_email"] = current_user.email
 
+    await supabase_service.create_audit_log(
+        action="REGISTRATION_CONFIRMED" if reg_status == RegistrationStatus.CONFIRMED.value else "REGISTRATION_WAITLISTED",
+        target_resource="registrations",
+        resource_id=reg_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        actor_name=current_user.full_name,
+        actor_role=current_user.role.value,
+        details=f"Student registered for '{event.get('title')}' ({reg_status}). Generated cryptographic HMAC ticket pass."
+    )
+
     return created_reg
 
 

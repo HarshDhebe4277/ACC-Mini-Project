@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Clock, MapPin, Search, CheckCircle2, AlertCircle } from "lucide-react";
+import { Clock, MapPin, Search, CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { EventItem } from "@/types";
+import ReactMarkdown from "react-markdown";
 
 export default function StudentEventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -17,6 +18,7 @@ export default function StudentEventsPage() {
   const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedEventDetails, setSelectedEventDetails] = useState<EventItem | null>(null);
 
   useEffect(() => {
     async function fetchEvents() {
@@ -175,9 +177,18 @@ export default function StudentEventsPage() {
                   </Badge>
                 </div>
                 <CardTitle className="text-lg font-bold text-slate-900">{event.title}</CardTitle>
-                <CardDescription className="text-xs line-clamp-3 mt-1 text-slate-600">
-                  {event.description}
-                </CardDescription>
+                <div className="line-clamp-3 text-xs mt-1 text-slate-600">
+                  <ReactMarkdown
+                    components={{
+                      p: ({ ...props }) => <span {...props} />,
+                      h1: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
+                      h2: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
+                      h3: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
+                    }}
+                  >
+                    {event.description}
+                  </ReactMarkdown>
+                </div>
               </CardHeader>
 
               <CardContent className="space-y-3 text-xs text-slate-600">
@@ -215,11 +226,21 @@ export default function StudentEventsPage() {
                 )}
               </CardContent>
 
-              <CardFooter className="pt-2 border-t border-slate-100">
+              <CardFooter className="pt-2 border-t border-slate-100 flex items-center space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedEventDetails(event)}
+                  className="text-xs text-slate-700 hover:bg-slate-100 flex items-center shrink-0"
+                >
+                  <Info className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                  Details
+                </Button>
                 <Button
                   onClick={() => handleRegister(event.id)}
                   disabled={registeringId === event.id}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
                 >
                   {registeringId === event.id ? "Processing..." : isFull ? "Join Waitlist" : "Register with 1-Click"}
                 </Button>
@@ -228,6 +249,83 @@ export default function StudentEventsPage() {
           );
         })}
       </div>
+
+      {/* Event Details Full Markdown Modal */}
+      {selectedEventDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <Badge variant="outline" className="text-xs font-semibold bg-slate-50 mb-1">
+                  {selectedEventDetails.department}
+                </Badge>
+                <h3 className="text-lg font-bold text-slate-900 leading-snug">
+                  {selectedEventDetails.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedEventDetails(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Start: {new Date(selectedEventDetails.start_time).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Venue: {selectedEventDetails.venue_name || "Campus Auditorium"}</span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs space-y-2">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ ...props }) => <h1 className="text-base font-bold text-slate-900 mt-2 mb-1" {...props} />,
+                    h2: ({ ...props }) => <h2 className="text-sm font-bold text-slate-900 mt-2 mb-1 border-b border-slate-200 pb-1" {...props} />,
+                    h3: ({ ...props }) => <h3 className="text-xs font-semibold text-slate-800 mt-1.5 mb-1" {...props} />,
+                    p: ({ ...props }) => <p className="text-xs text-slate-700 mb-2 leading-relaxed" {...props} />,
+                    ul: ({ ...props }) => <ul className="list-disc list-inside text-xs text-slate-700 mb-2 space-y-1" {...props} />,
+                    ol: ({ ...props }) => <ol className="list-decimal list-inside text-xs text-slate-700 mb-2 space-y-1" {...props} />,
+                    li: ({ ...props }) => <li className="text-xs text-slate-700" {...props} />,
+                    strong: ({ ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                    blockquote: ({ ...props }) => <blockquote className="border-l-4 border-blue-400 pl-3 italic text-xs text-slate-600 my-2 bg-blue-50/50 py-1" {...props} />,
+                    code: ({ ...props }) => <code className="bg-slate-100 text-purple-800 px-1 py-0.5 rounded text-[11px] font-mono" {...props} />,
+                  }}
+                >
+                  {selectedEventDetails.description}
+                </ReactMarkdown>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedEventDetails(null)}
+              >
+                Close
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  handleRegister(selectedEventDetails.id);
+                  setSelectedEventDetails(null);
+                }}
+                disabled={registeringId === selectedEventDetails.id}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
+              >
+                Register for Event
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

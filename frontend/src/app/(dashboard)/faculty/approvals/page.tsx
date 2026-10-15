@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Check, X, Clock, MapPin, AlertCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { EventItem } from "@/types";
+import ReactMarkdown from "react-markdown";
 
 export default function FacultyApprovalsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -136,8 +137,23 @@ export default function FacultyApprovalsPage() {
                 </div>
               </div>
 
-              <div className="p-3 bg-white border border-slate-200 rounded-lg whitespace-pre-line font-mono text-[11px]">
-                {event.description}
+              <div className="p-4 bg-white border border-slate-200 rounded-lg text-slate-800 text-xs space-y-2">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ ...props }) => <h1 className="text-base font-bold text-slate-900 mt-2 mb-1" {...props} />,
+                    h2: ({ ...props }) => <h2 className="text-sm font-bold text-slate-900 mt-2 mb-1 border-b border-slate-200 pb-1" {...props} />,
+                    h3: ({ ...props }) => <h3 className="text-xs font-semibold text-slate-800 mt-1.5 mb-1" {...props} />,
+                    p: ({ ...props }) => <p className="text-xs text-slate-700 mb-2 leading-relaxed" {...props} />,
+                    ul: ({ ...props }) => <ul className="list-disc list-inside text-xs text-slate-700 mb-2 space-y-1" {...props} />,
+                    ol: ({ ...props }) => <ol className="list-decimal list-inside text-xs text-slate-700 mb-2 space-y-1" {...props} />,
+                    li: ({ ...props }) => <li className="text-xs text-slate-700" {...props} />,
+                    strong: ({ ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                    blockquote: ({ ...props }) => <blockquote className="border-l-4 border-amber-400 pl-3 italic text-xs text-slate-600 my-2 bg-amber-50/50 py-1" {...props} />,
+                    code: ({ ...props }) => <code className="bg-slate-100 text-purple-800 px-1 py-0.5 rounded text-[11px] font-mono" {...props} />,
+                  }}
+                >
+                  {event.description}
+                </ReactMarkdown>
               </div>
 
               {rejectId === event.id && (
@@ -150,7 +166,7 @@ export default function FacultyApprovalsPage() {
                     placeholder="E.g., Event overlaps with mid-term examinations; reschedule to post-exam week."
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    className="w-full text-xs p-2 rounded border border-red-300 focus:outline-none focus:ring-1 focus:ring-red-500"
+                    className="w-full text-xs p-2 rounded border border-red-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-red-500"
                   />
                   <div className="flex justify-end space-x-2">
                     <Button

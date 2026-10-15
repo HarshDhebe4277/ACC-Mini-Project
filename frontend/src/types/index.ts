@@ -107,3 +107,16 @@ export interface AIDraftResponse {
   suggested_capacity: number;
 }
 
+export interface AuditLogItem {
+  id: string;
+  action: string;
+  actor_id?: string | null;
+  actor: string;
+  target_resource: string;
+  resource_id?: string | null;
+  details: string | Record<string, any>;
+  created_at?: string;
+  timestamp: string;
+}
+
+

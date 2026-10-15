@@ -247,3 +247,29 @@ class EventAttendanceReport(BaseModel):
     attendance_rate_percent: float
     attendees: List[AttendanceReportItem]
 
+
+# =============================================================================
+# Audit Log Schemas
+# =============================================================================
+
+class AuditLogCreate(BaseModel):
+    action: str
+    target_resource: str
+    resource_id: Optional[str] = None
+    details: Optional[Any] = None
+    actor_id: Optional[str] = None
+    actor: Optional[str] = None
+
+
+class AuditLogResponse(BaseModel):
+    id: str
+    action: str
+    target_resource: str
+    resource_id: Optional[str] = None
+    actor_id: Optional[str] = None
+    actor: str = "System"
+    details: Any = None
+    created_at: datetime
+    timestamp: Optional[datetime] = None
+
+

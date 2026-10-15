@@ -3,50 +3,180 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
-import { GraduationCap, Shield, UserCheck, Sparkles } from "lucide-react";
+import { GraduationCap, Shield, UserCheck, Sparkles, LogIn, UserPlus } from "lucide-react";
+
+type AuthMode = "signin" | "signup";
+type UserRoleType = "STUDENT" | "ORGANIZER" | "FACULTY" | "ADMIN";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const handleGoogleLogin = async () => {
+  // Form states
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [department, setDepartment] = useState("Information Technology");
+  const [role, setRole] = useState<UserRoleType>("STUDENT");
+
+  const saveAuthSession = (accessToken: string, userPayload: Record<string, unknown>, roleName: string) => {
+    // Set cookies for middleware
+    document.cookie = `campus_role=${roleName}; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = `campus_token=${accessToken}; path=/; max-age=86400; SameSite=Lax`;
+
+    // Set localStorage for client-side apiFetch
+    localStorage.setItem("campus_token", accessToken);
+    localStorage.setItem("campus_user", JSON.stringify(userPayload));
+  };
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    if (!email || !password) {
+      setErrorMsg("Please enter both email and password.");
+      return;
+    }
+
     try {
       setLoading(true);
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
       });
-      if (error) throw error;
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.session || !data.user) {
+        throw new Error("Unable to establish authentication session.");
+      }
+
+      // Query profiles table for role & department
+      let userRole: UserRoleType = "STUDENT";
+      let userFullName = data.user.user_metadata?.full_name || email.split("@")[0];
+      let userDept = data.user.user_metadata?.department || "General";
+
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, full_name, department")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile) {
+          userRole = (profile.role as UserRoleType) || userRole;
+          userFullName = profile.full_name || userFullName;
+          userDept = profile.department || userDept;
+        }
+      } catch {
+        // Fall back to metadata if profiles lookup is restricted by RLS
+        userRole = (data.user.user_metadata?.role as UserRoleType) || "STUDENT";
+      }
+
+      const sessionPayload = {
+        sub: data.user.id,
+        email: data.user.email,
+        role: userRole,
+        user_metadata: {
+          full_name: userFullName,
+          department: userDept,
+          role: userRole,
+        },
+      };
+
+      saveAuthSession(data.session.access_token, sessionPayload, userRole);
+      router.push(`/${userRole.toLowerCase()}/dashboard`);
     } catch (err: unknown) {
-      setErrorMsg((err as Error).message || "Google sign-in failed");
+      setErrorMsg((err as Error).message || "Sign in failed. Please verify your credentials.");
+    } finally {
       setLoading(false);
     }
   };
 
-  const setDemoRole = (role: "STUDENT" | "ORGANIZER" | "FACULTY" | "ADMIN", name: string, dept: string) => {
-    // Generate a valid base64 token representation for client-side routing & testing
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    if (!email || !password || !fullName) {
+      setErrorMsg("Please fill in your name, email, and password.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMsg("Password must be at least 6 characters long.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const supabase = createClient();
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            department: department.trim(),
+            role: role,
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // If Supabase has email confirmation disabled, session is returned immediately
+      if (data.session && data.user) {
+        const sessionPayload = {
+          sub: data.user.id,
+          email: data.user.email,
+          role: role,
+          user_metadata: {
+            full_name: fullName.trim(),
+            department: department.trim(),
+            role: role,
+          },
+        };
+        saveAuthSession(data.session.access_token, sessionPayload, role);
+        router.push(`/${role.toLowerCase()}/dashboard`);
+        return;
+      }
+
+      // If email confirmation is required by Supabase
+      setSuccessMsg(
+        "Registration successful! If email confirmation is enabled on your instance, please check your inbox to confirm your email. You can now sign in."
+      );
+      setMode("signin");
+    } catch (err: unknown) {
+      setErrorMsg((err as Error).message || "Sign up failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setDemoRole = (demoRole: UserRoleType, name: string, dept: string) => {
     const demoPayload = {
-      sub: `demo-${role.toLowerCase()}-1`,
-      email: `${role.toLowerCase()}@ves.ac.in`,
-      role,
-      user_metadata: { full_name: name, department: dept }
+      sub: `demo-${demoRole.toLowerCase()}-1`,
+      email: `${demoRole.toLowerCase()}@ves.ac.in`,
+      role: demoRole,
+      user_metadata: { full_name: name, department: dept, role: demoRole },
     };
-    
-    // Set cookies for middleware
-    document.cookie = `campus_role=${role}; path=/; max-age=86400`;
-    document.cookie = `campus_token=demo-token-${role}; path=/; max-age=86400`;
 
-    // Set localStorage for api-client
-    localStorage.setItem("campus_token", `demo-token-${role}`);
-    localStorage.setItem("campus_user", JSON.stringify(demoPayload));
-
-    router.push(`/${role.toLowerCase()}/dashboard`);
+    saveAuthSession(`demo-token-${demoRole}`, demoPayload, demoRole);
+    router.push(`/${demoRole.toLowerCase()}/dashboard`);
   };
 
   return (
@@ -58,51 +188,197 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold text-slate-900">CampusEvents Portal</CardTitle>
           <CardDescription>
-            Authenticate with Google OAuth 2.0 or select a verified test persona
+            Native Supabase Authentication &bull; Email &amp; Password
           </CardDescription>
+
+          <div className="flex justify-center mt-4">
+            <div className="inline-flex rounded-lg bg-slate-100 p-1 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signin");
+                  setErrorMsg("");
+                  setSuccessMsg("");
+                }}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  mode === "signin"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("signup");
+                  setErrorMsg("");
+                  setSuccessMsg("");
+                }}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  mode === "signup"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          </div>
         </CardHeader>
 
-        <CardContent className="space-y-6 pt-4">
+        <CardContent className="space-y-4 pt-2">
           {errorMsg && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">
               {errorMsg}
             </div>
           )}
 
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 flex items-center justify-center space-x-2 border-slate-300 hover:bg-slate-100 font-medium"
-            onClick={handleGoogleLogin}
-            disabled={loading}
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.9c2.28-2.1 3.64-5.2 3.64-9.14z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.9-3.05c-1.08.72-2.45 1.16-4.03 1.16-3.1 0-5.74-2.09-6.68-4.91H1.21v3.15C3.26 21.46 7.34 24 12 24z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.32 14.29c-.24-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.56H1.21C.44 8.11 0 9.99 0 12s.44 3.89 1.21 5.44l4.11-3.15z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.54 1.21 6.56l4.11 3.15c.94-2.82 3.58-4.96 6.68-4.96z"
-              />
-            </svg>
-            <span>Sign in with Google</span>
-          </Button>
+          {successMsg && (
+            <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md">
+              {successMsg}
+            </div>
+          )}
 
-          <div className="relative">
+          {mode === "signin" ? (
+            <form onSubmit={handleSignIn} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Email Address
+                </label>
+                <Input
+                  type="email"
+                  placeholder="name@college.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Password
+                </label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-10 font-semibold flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700"
+                disabled={loading}
+              >
+                <LogIn className="w-4 h-4" />
+                <span>{loading ? "Signing in..." : "Sign In with Email"}</span>
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignUp} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Full Name
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Aarav Sharma"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Department
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Information Technology"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    required
+                    disabled={loading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Portal Role
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as UserRoleType)}
+                    className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    disabled={loading}
+                  >
+                    <option value="STUDENT">Student</option>
+                    <option value="ORGANIZER">Organizer</option>
+                    <option value="FACULTY">Faculty</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Email Address
+                </label>
+                <Input
+                  type="email"
+                  placeholder="name@college.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Password (min. 6 characters)
+                </label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-10 font-semibold flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700"
+                disabled={loading}
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>{loading ? "Creating Account..." : "Create Account"}</span>
+              </Button>
+            </form>
+          )}
+
+          <div className="relative pt-2">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-slate-200" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-slate-500">Or Demo Quick Persona Access</span>
+              <span className="bg-white px-2 text-slate-500 font-medium">
+                Or Quick Test Persona
+              </span>
             </div>
           </div>
 
@@ -162,10 +438,9 @@ export default function LoginPage() {
         </CardContent>
 
         <CardFooter className="flex justify-center border-t border-slate-100 pt-4 text-xs text-slate-400">
-          Role-Based Access Control Protected &bull; Supabase RLS Secured
+          Native Supabase Auth &bull; Role-Based Access Control &bull; RLS Secured
         </CardFooter>
       </Card>
     </div>
   );
 }
-
