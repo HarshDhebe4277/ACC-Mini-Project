@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Camera, RefreshCw, Upload, Sparkles, SwitchCamera, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Camera, RefreshCw, Upload, Sparkles, SwitchCamera } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { AttendanceScanResult, RegistrationItem } from "@/types";
 import jsQR from "jsqr";

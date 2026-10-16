@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -85,7 +85,11 @@ export default function StudentEventsPage() {
       });
       setSuccessMsg("Registration successful! Your digital HMAC QR ticket pass is ready.");
       // Mark as registered immediately so button goes away!
-      setRegisteredEventIds((prev) => new Set([...prev, eventId]));
+      setRegisteredEventIds((prev) => {
+        const next = new Set(prev);
+        next.add(eventId);
+        return next;
+      });
       // Increment local capacity
       setEvents((prev) =>
         prev.map((ev) =>
@@ -96,7 +100,11 @@ export default function StudentEventsPage() {
       const msg = (err as Error).message || "Registration failed";
       setErrorMsg(msg);
       if (msg.toLowerCase().includes("already registered")) {
-        setRegisteredEventIds((prev) => new Set([...prev, eventId]));
+        setRegisteredEventIds((prev) => {
+          const next = new Set(prev);
+          next.add(eventId);
+          return next;
+        });
       }
     } finally {
       setRegisteringId(null);

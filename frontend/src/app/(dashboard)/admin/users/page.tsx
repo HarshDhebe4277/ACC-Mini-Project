@@ -90,9 +90,6 @@ export default function AdminUsersPage() {
   }, []);
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
-    const prevUser = users.find((u) => u.id === userId);
-    const oldRole = prevUser?.role || "STUDENT";
-
     // Optimistically update UI
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))

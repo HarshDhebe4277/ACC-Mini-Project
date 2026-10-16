@@ -21,13 +21,13 @@ Write-Host "==========================================================" -Foregro
 Write-Host "  Minikube CI/CD Continuous Deployment Watcher" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# Point Docker CLI to Minikube
-Write-Host "Connecting to Minikube environment..." -ForegroundColor Yellow
+# Verify Minikube is running
+Write-Host "Verifying Minikube cluster is reachable..." -ForegroundColor Yellow
 try {
-    & minikube -p minikube docker-env --shell powershell | Invoke-Expression
+    minikube status | Out-Null
     Write-Host "[OK] Connected to Minikube" -ForegroundColor Green
 } catch {
-    Write-Warning "Could not connect to Minikube daemon. Ensure Minikube is started (minikube start)."
+    Write-Warning "Could not connect to Minikube. Ensure Minikube is started (minikube start)."
 }
 
 Write-Host "Watching for new commits on '$Branch' every $PollIntervalSeconds seconds..." -ForegroundColor Cyan
@@ -45,10 +45,11 @@ while ($true) {
             git pull origin $Branch
 
             if ($LocalBuild) {
-                Write-Host "[-LocalBuild mode] Rebuilding images inside Minikube..." -ForegroundColor Cyan
-                & minikube -p minikube docker-env --shell powershell | Invoke-Expression
+                Write-Host "[-LocalBuild mode] Rebuilding images with Docker and loading into Minikube..." -ForegroundColor Cyan
                 docker build -t ghcr.io/harshdhebe4277/acc-mini-project/backend:latest ./backend
+                minikube image load ghcr.io/harshdhebe4277/acc-mini-project/backend:latest
                 docker build -t ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest ./frontend
+                minikube image load ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest
             } else {
                 Write-Host "[GHCR mode] Waiting 90s for GitHub Actions to build and publish images to ghcr.io..." -ForegroundColor Cyan
                 Start-Sleep -Seconds 90

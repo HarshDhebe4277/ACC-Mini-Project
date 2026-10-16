@@ -18,7 +18,7 @@ spec:
       containers:
       - name: frontend
         image: ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
           name: http
