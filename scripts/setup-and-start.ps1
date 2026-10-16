@@ -43,18 +43,14 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "`n[Step 3/6] Enabling NGINX Ingress Addon..." -ForegroundColor Yellow
 minikube addons enable ingress
 
-# 4. Build Docker Images & Load into Minikube
-Write-Host "`n[Step 4/6] Building container images with Docker and loading into Minikube..." -ForegroundColor Yellow
+# 4. Fetch Pre-Built Container Images from GitHub Actions (GHCR)
+Write-Host "`n[Step 4/6] Fetching images built by GitHub Actions from ghcr.io..." -ForegroundColor Yellow
 
-Write-Host "Building Backend Docker image..." -ForegroundColor Cyan
-docker build -t ghcr.io/harshdhebe4277/acc-mini-project/backend:latest ./backend
-Write-Host "Loading Backend image into Minikube..." -ForegroundColor Yellow
-minikube image load ghcr.io/harshdhebe4277/acc-mini-project/backend:latest
+Write-Host "Pulling Backend image from GHCR..." -ForegroundColor Cyan
+minikube image pull ghcr.io/harshdhebe4277/acc-mini-project/backend:latest
 
-Write-Host "Building Frontend Docker image..." -ForegroundColor Cyan
-docker build -t ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest ./frontend
-Write-Host "Loading Frontend image into Minikube..." -ForegroundColor Yellow
-minikube image load ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest
+Write-Host "Pulling Frontend image from GHCR..." -ForegroundColor Cyan
+minikube image pull ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest
 
 # 5. Apply Kubernetes manifests
 Write-Host "`n[Step 5/6] Applying Kubernetes manifests with Kustomize..." -ForegroundColor Yellow
