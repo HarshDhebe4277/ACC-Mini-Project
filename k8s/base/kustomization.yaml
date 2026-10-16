@@ -6,7 +6,7 @@ namespace: campus-events
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secrets.yaml.example
+  - secrets.yaml
   - backend-deployment.yaml
   - backend-service.yaml
   - frontend-deployment.yaml

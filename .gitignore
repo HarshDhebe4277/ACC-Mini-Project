@@ -12,6 +12,8 @@ desktop.ini
 sa-key.json
 *.key
 *.pem
+secrets.yaml
+k8s/**/secrets.yaml
 
 # Python
 backend/.venv/

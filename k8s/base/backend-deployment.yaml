@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: campus-events/backend:latest
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/harshdhebe4277/acc-mini-project/backend:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
           name: http
