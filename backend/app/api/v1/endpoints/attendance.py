@@ -5,6 +5,7 @@ from app.models.schemas import (
     AttendanceScanRequest,
     AttendanceScanResponse,
     AttendanceMethod,
+    EventStatus,
     UserPayload,
     UserRole
 )
@@ -41,11 +42,13 @@ async def scan_ticket_attendance(
     if not event:
         raise HTTPException(status_code=404, detail="Event referenced by ticket not found")
 
-    if current_user.role == UserRole.ORGANIZER and event.get("organizer_id") != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only scan attendance for events you organized"
-        )
+    if current_user.role == UserRole.ORGANIZER:
+        # Organizers can scan events they organized OR approved events at campus gates
+        if event.get("status") != EventStatus.APPROVED.value and event.get("organizer_id") != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only scan attendance for approved campus events or your own events"
+            )
 
     # 3. Check registration validity
     reg = await supabase_service.get_registration(reg_id)
@@ -80,11 +83,14 @@ async def scan_ticket_attendance(
         details=f"HMAC ticket verified & checked in{venue_info} for event '{event.get('title')}'."
     )
 
+    student_profile = await supabase_service.get_profile(student_id)
+    student_name = student_profile.get("full_name") if student_profile else f"Student ({student_id[:8]})"
+
     return AttendanceScanResponse(
         success=True,
         message="Attendance successfully verified and recorded",
         registration_id=reg_id,
-        user_name=f"Student ({student_id[:8]})",
+        user_name=student_name,
         event_id=event_id,
         event_title=event.get("title"),
         marked_at=datetime.fromisoformat(record["marked_at"]),

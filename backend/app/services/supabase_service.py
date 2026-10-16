@@ -1,9 +1,12 @@
 import uuid
+import logging
 from datetime import datetime, date, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from supabase import create_client, Client
 from app.core.config import settings
 from app.models.schemas import EventStatus, RegistrationStatus, AttendanceMethod
+
+logger = logging.getLogger(__name__)
 
 
 def is_valid_uuid(val: Any) -> bool:
@@ -248,10 +251,42 @@ class SupabaseService:
 
     async def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
         if self.is_mock:
-            return self._mock_events.get(event_id)
+            event = self._mock_events.get(event_id)
+            if not event:
+                return None
+            regs = [r for r in self._mock_registrations.values() if r.get("event_id") == event_id and r.get("status") in [RegistrationStatus.CONFIRMED.value, RegistrationStatus.ATTENDED.value]]
+            atts = [a for a in self._mock_attendance.values() if any(r["id"] == a.get("registration_id") for r in regs)]
+            event["current_capacity"] = max(len(regs), event.get("current_capacity", 0))
+            event["total_attended"] = len(atts)
+            event["turnout_rate"] = round((len(atts) / len(regs) * 100), 1) if regs else 0.0
+            return event
 
         res = self._client.table("events").select("*").eq("id", event_id).execute()
-        return res.data[0] if res.data else None
+        if not res.data:
+            return None
+        event = res.data[0]
+        try:
+            regs_res = self._client.table("registrations").select("id, status").eq("event_id", event_id).execute()
+            all_regs = regs_res.data or []
+            active_regs = [r for r in all_regs if r.get("status") in [RegistrationStatus.CONFIRMED.value, RegistrationStatus.ATTENDED.value]]
+            
+            att_res = self._client.table("attendance").select("registration_id").execute()
+            attended_reg_ids = {a["registration_id"] for a in (att_res.data or []) if a.get("registration_id")}
+
+            live_reg = len(active_regs)
+            live_att = sum(1 for r in active_regs if r.get("status") == RegistrationStatus.ATTENDED.value or r.get("id") in attended_reg_ids)
+            event["current_capacity"] = live_reg
+            event["total_attended"] = live_att
+            event["turnout_rate"] = round((live_att / live_reg * 100), 1) if live_reg > 0 else 0.0
+
+            if res.data[0].get("current_capacity") != live_reg:
+                try:
+                    self._client.table("events").update({"current_capacity": live_reg}).eq("id", event_id).execute()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Failed to calculate live event stats for {event_id}: {e}")
+        return event
 
     async def list_events(
         self,
@@ -267,6 +302,12 @@ class SupabaseService:
                 results = [e for e in results if e.get("department") == department]
             if status:
                 results = [e for e in results if e.get("status") == status]
+            for e in results:
+                regs = [r for r in self._mock_registrations.values() if r.get("event_id") == e.get("id") and r.get("status") in [RegistrationStatus.CONFIRMED.value, RegistrationStatus.ATTENDED.value]]
+                atts = [a for a in self._mock_attendance.values() if any(r["id"] == a.get("registration_id") for r in regs)]
+                e["current_capacity"] = max(len(regs), e.get("current_capacity", 0))
+                e["total_attended"] = len(atts)
+                e["turnout_rate"] = round((len(atts) / len(regs) * 100), 1) if regs else 0.0
             return results
 
         query = self._client.table("events").select("*")
@@ -277,7 +318,43 @@ class SupabaseService:
         if status:
             query = query.eq("status", status)
         res = query.execute()
-        return res.data or []
+        events = res.data or []
+
+        try:
+            regs_res = self._client.table("registrations").select("id, event_id, status").execute()
+            all_regs = regs_res.data or []
+            
+            att_res = self._client.table("attendance").select("registration_id").execute()
+            attended_reg_ids = {a["registration_id"] for a in (att_res.data or []) if a.get("registration_id")}
+
+            reg_counts: Dict[str, int] = {}
+            att_counts: Dict[str, int] = {}
+
+            for r in all_regs:
+                eid = r.get("event_id")
+                r_status = r.get("status")
+                r_id = r.get("id")
+                if r_status in [RegistrationStatus.CONFIRMED.value, RegistrationStatus.ATTENDED.value]:
+                    reg_counts[eid] = reg_counts.get(eid, 0) + 1
+                if r_status == RegistrationStatus.ATTENDED.value or r_id in attended_reg_ids:
+                    att_counts[eid] = att_counts.get(eid, 0) + 1
+
+            for ev in events:
+                eid = ev.get("id")
+                live_reg = reg_counts.get(eid, ev.get("current_capacity", 0) or 0)
+                live_att = att_counts.get(eid, 0)
+                ev["current_capacity"] = live_reg
+                ev["total_attended"] = live_att
+                ev["turnout_rate"] = round((live_att / live_reg * 100), 1) if live_reg > 0 else 0.0
+
+                if ev.get("current_capacity") != live_reg:
+                    try:
+                        self._client.table("events").update({"current_capacity": live_reg}).eq("id", eid).execute()
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning(f"Failed to calculate live attendance counts for events: {e}")
+        return events
 
     async def update_event(self, event_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -325,7 +402,19 @@ class SupabaseService:
         res = self._client.table("registrations").insert(record).execute()
         # Increment capacity on database if confirmed
         if status == RegistrationStatus.CONFIRMED.value:
-            self._client.rpc("increment_event_capacity", {"e_id": event_id}).execute()
+            try:
+                self._client.rpc("increment_event_capacity", {"e_id": event_id}).execute()
+            except Exception as e:
+                logger.warning(
+                    f"RPC increment_event_capacity failed ({e}). Falling back to direct table update."
+                )
+                try:
+                    event_res = self._client.table("events").select("current_capacity").eq("id", event_id).execute()
+                    if event_res.data:
+                        curr = event_res.data[0].get("current_capacity", 0) or 0
+                        self._client.table("events").update({"current_capacity": curr + 1}).eq("id", event_id).execute()
+                except Exception as update_err:
+                    logger.error(f"Failed to increment event capacity directly: {update_err}")
         return res.data[0] if res.data else record
 
     async def get_registration(self, reg_id: str) -> Optional[Dict[str, Any]]:
@@ -349,18 +438,81 @@ class SupabaseService:
         res = self._client.table("registrations").select("*").eq("event_id", event_id).eq("user_id", user_id).execute()
         return res.data[0] if res.data else None
 
+    async def get_venue(self, venue_id: str) -> Optional[Dict[str, Any]]:
+        if not is_valid_uuid(venue_id) and not self.is_mock:
+            return None
+        if self.is_mock:
+            return {"id": venue_id, "name": "Campus Auditorium", "location": "Ground Floor"}
+        try:
+            res = self._client.table("venues").select("*").eq("id", venue_id).execute()
+            return res.data[0] if res.data else None
+        except Exception:
+            return None
+
     async def list_user_registrations(self, user_id: str) -> List[Dict[str, Any]]:
         if self.is_mock:
-            regs = [r for r in self._mock_registrations.values() if r["user_id"] == user_id]
+            regs = [dict(r) for r in self._mock_registrations.values() if r["user_id"] == user_id]
             for r in regs:
                 event = self._mock_events.get(r["event_id"])
                 if event:
                     r["event_title"] = event.get("title")
                     r["event_start_time"] = event.get("start_time")
+                    r["event_end_time"] = event.get("end_time")
+                    r["event_department"] = event.get("department")
+                    r["event_location"] = event.get("venue_name") or "Campus Auditorium"
             return regs
 
-        res = self._client.table("registrations").select("*, events(title, start_time, venue_id)").eq("user_id", user_id).execute()
-        return res.data or []
+        data = []
+        try:
+            res = self._client.table("registrations").select("*, events(*, venues(name, location))").eq("user_id", user_id).order("created_at", desc=True).execute()
+            data = res.data or []
+        except Exception as e:
+            logger.warning(f"Failed to join registrations with events/venues: {e}")
+            try:
+                res = self._client.table("registrations").select("*, events(*)").eq("user_id", user_id).order("created_at", desc=True).execute()
+                data = res.data or []
+            except Exception as e2:
+                logger.warning(f"Failed to join registrations with events: {e2}")
+                try:
+                    res = self._client.table("registrations").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+                    data = res.data or []
+                except Exception as e3:
+                    logger.error(f"Failed to query registrations: {e3}")
+                    data = []
+
+        flattened = []
+        for r in data:
+            item = dict(r)
+            ev = item.get("events")
+            if isinstance(ev, list) and ev:
+                ev = ev[0]
+
+            if not isinstance(ev, dict) and item.get("event_id"):
+                ev = await self.get_event(item["event_id"])
+
+            if isinstance(ev, dict):
+                item["event_title"] = ev.get("title")
+                item["event_start_time"] = ev.get("start_time")
+                item["event_end_time"] = ev.get("end_time")
+                item["event_department"] = ev.get("department")
+                venues = ev.get("venues")
+                if isinstance(venues, list) and venues:
+                    venues = venues[0]
+                if isinstance(venues, dict):
+                    item["event_location"] = venues.get("name") or venues.get("location")
+                elif ev.get("venue_name"):
+                    item["event_location"] = ev.get("venue_name")
+                elif ev.get("venue_id"):
+                    v = await self.get_venue(ev["venue_id"])
+                    if v:
+                        item["event_location"] = v.get("name") or v.get("location")
+
+            if not item.get("event_location"):
+                item["event_location"] = "Campus Auditorium"
+
+            flattened.append(item)
+
+        return flattened
 
     # =========================================================================
     # Attendance Management
@@ -408,17 +560,47 @@ class SupabaseService:
             attendee_list = []
             for r in regs:
                 att = next((a for a in self._mock_attendance.values() if a["registration_id"] == r["id"]), None)
+                prof = self._mock_profiles.get(r["user_id"])
                 attendee_list.append({
                     "registration_id": r["id"],
+                    "id": r["id"],
                     "user_id": r["user_id"],
                     "status": r["status"],
-                    "attended": att is not None,
-                    "marked_at": att["marked_at"] if att else None
+                    "attended": att is not None or r.get("status") == RegistrationStatus.ATTENDED.value,
+                    "marked_at": att["marked_at"] if att else None,
+                    "student_name": prof.get("full_name") if prof else f"Student {r['user_id'][:6]}",
+                    "student_email": prof.get("email") if prof else f"user_{r['user_id'][:6]}@ves.ac.in",
+                    "department": prof.get("department") if prof else None,
                 })
             return attendee_list
 
         res = self._client.table("registrations").select("id, user_id, status, attendance(id, marked_at)").eq("event_id", event_id).execute()
-        return res.data or []
+        attendees = []
+        for r in (res.data or []):
+            att_info = r.get("attendance")
+            if isinstance(att_info, list) and att_info:
+                att_info = att_info[0]
+            is_attended = (
+                r.get("status") == RegistrationStatus.ATTENDED.value
+                or bool(att_info)
+            )
+            marked_at = att_info.get("marked_at") if isinstance(att_info, dict) else None
+            
+            user_id = r.get("user_id")
+            prof = await self.get_profile(user_id) if user_id else None
+
+            attendees.append({
+                "registration_id": r.get("id"),
+                "id": r.get("id"),
+                "user_id": user_id,
+                "status": r.get("status"),
+                "attended": is_attended,
+                "marked_at": marked_at,
+                "student_name": prof.get("full_name") if prof else f"Student {user_id[:6] if user_id else 'User'}",
+                "student_email": prof.get("email") if prof else f"user_{user_id[:6] if user_id else 'unknown'}@ves.ac.in",
+                "department": prof.get("department") if prof else None,
+            })
+        return attendees
 
     # =========================================================================
     # Feedbacks

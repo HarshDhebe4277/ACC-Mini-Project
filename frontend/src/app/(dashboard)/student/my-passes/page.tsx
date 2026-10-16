@@ -15,8 +15,23 @@ export default function StudentMyPassesPage() {
   useEffect(() => {
     async function fetchPasses() {
       try {
-        const data = await apiFetch<RegistrationItem[]>("/registrations/me");
-        setPasses(data);
+        const [data, events] = await Promise.all([
+          apiFetch<RegistrationItem[]>("/registrations/me"),
+          apiFetch<any[]>("/events").catch(() => []),
+        ]);
+        const eventMap = new Map((events || []).map((ev: any) => [ev.id, ev]));
+        const enriched = (data || []).map((p) => {
+          const ev = eventMap.get(p.event_id);
+          return {
+            ...p,
+            event_title: p.event_title || ev?.title,
+            event_start_time: p.event_start_time || ev?.start_time,
+            event_end_time: p.event_end_time || ev?.end_time,
+            event_location: p.event_location || ev?.venue_name || "Campus Auditorium",
+            event_department: p.event_department || ev?.department,
+          };
+        });
+        setPasses(enriched);
       } catch {
         // Fallback demo pass
         setPasses([

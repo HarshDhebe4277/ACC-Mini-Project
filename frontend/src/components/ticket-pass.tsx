@@ -52,38 +52,83 @@ export function TicketPass({ pass }: TicketPassProps) {
         </Badge>
       </div>
 
-      <CardHeader className="p-5 pb-2">
-        <h3 className="font-bold text-lg text-slate-900 leading-tight">
+      <CardHeader className="p-5 pb-3">
+        <div className="flex items-center justify-between mb-1">
+          <Badge variant="secondary" className="text-[11px] font-semibold bg-blue-50 text-blue-700">
+            {pass.event_department || "VES Campus"}
+          </Badge>
+          <span className="text-[11px] font-mono text-slate-400">
+            #{pass.id.slice(0, 8).toUpperCase()}
+          </span>
+        </div>
+        <h3 className="font-bold text-lg text-slate-900 leading-snug">
           {pass.event_title || "Campus Event Pass"}
         </h3>
-        <p className="text-xs text-slate-500">Holder: {pass.user_name || "Registered Student"}</p>
+        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Attendee</span>
+            <span className="font-medium text-slate-800">{pass.user_name || "Registered Student"}</span>
+          </div>
+          {pass.user_email && (
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Email</span>
+              <span className="text-[11px] text-slate-500 font-mono truncate max-w-[140px] block">{pass.user_email}</span>
+            </div>
+          )}
+        </div>
       </CardHeader>
 
-      <CardContent className="p-5 pt-2 space-y-4">
+      <CardContent className="p-5 pt-0 space-y-4">
         <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg border border-slate-200 shadow-inner">
           <QRCodeSVG
             value={pass.ticket_qr_hash}
-            size={160}
-            level="H"
+            size={200}
+            level="L"
             includeMargin={true}
           />
-          <span className="mt-2 text-[10px] font-mono text-slate-400 select-all truncate max-w-[200px]">
-            {pass.ticket_qr_hash.slice(0, 16)}...{pass.ticket_qr_hash.slice(-8)}
-          </span>
+          <div className="mt-2 flex items-center space-x-2">
+            <span className="text-[10px] font-mono text-slate-400 select-all truncate max-w-[150px]">
+              {pass.ticket_qr_hash.slice(0, 14)}...{pass.ticket_qr_hash.slice(-6)}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(pass.ticket_qr_hash);
+                alert("Pass ticket hash copied to clipboard!");
+              }}
+              className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+            >
+              Copy Hash
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-1.5 text-xs text-slate-600">
-          <div className="flex items-center space-x-2">
-            <Clock className="w-3.5 h-3.5 text-blue-600" />
-            <span>
-              {pass.event_start_time
-                ? new Date(pass.event_start_time).toLocaleString()
-                : "Schedule Announced"}
-            </span>
+        <div className="space-y-2 text-xs text-slate-600 bg-slate-50/80 p-3 rounded-lg border border-slate-200/60">
+          <div className="flex items-start space-x-2.5">
+            <Clock className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Date & Time</span>
+              <span className="font-semibold text-slate-800">
+                {pass.event_start_time
+                  ? new Date(pass.event_start_time).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  : "Schedule Announced"}
+              </span>
+              {pass.event_end_time && (
+                <span className="text-slate-500 text-[11px] block">
+                  Until: {new Date(pass.event_end_time).toLocaleTimeString(undefined, { timeStyle: "short" })}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <MapPin className="w-3.5 h-3.5 text-blue-600" />
-            <span>{pass.event_location || "Campus Venue / Main Hall"}</span>
+          <div className="flex items-start space-x-2.5 pt-1.5 border-t border-slate-200/50">
+            <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Venue</span>
+              <span className="font-semibold text-slate-800">{pass.event_location || "Campus Auditorium"}</span>
+            </div>
           </div>
         </div>
       </CardContent>

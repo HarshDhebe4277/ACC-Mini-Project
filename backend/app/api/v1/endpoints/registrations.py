@@ -85,6 +85,9 @@ async def register_for_event(
     created_reg["ticket_qr_hash"] = ticket_qr_hash
     created_reg["event_title"] = event.get("title")
     created_reg["event_start_time"] = event.get("start_time")
+    created_reg["event_end_time"] = event.get("end_time")
+    created_reg["event_department"] = event.get("department")
+    created_reg["event_location"] = event.get("venue_name") or "Campus Auditorium"
     created_reg["user_name"] = current_user.full_name
     created_reg["user_email"] = current_user.email
 

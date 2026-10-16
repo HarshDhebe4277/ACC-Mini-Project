@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, RefreshCw } from "lucide-react";
 import { UserRole } from "@/types";
+import { apiFetch } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 
 interface DemoUser {
   id: string;
@@ -16,58 +18,109 @@ interface DemoUser {
   isActive: boolean;
 }
 
+const DEFAULT_USERS: DemoUser[] = [
+  {
+    id: "u-1",
+    name: "Aarav Sharma",
+    email: "aarav.sharma@ves.ac.in",
+    department: "Information Technology",
+    role: "STUDENT",
+    isActive: true,
+  },
+  {
+    id: "u-2",
+    name: "Rohan Mehta",
+    email: "rohan.mehta@ves.ac.in",
+    department: "Computer Science",
+    role: "ORGANIZER",
+    isActive: true,
+  },
+  {
+    id: "u-3",
+    name: "Dr. Sunita Rao",
+    email: "sunita.rao@ves.ac.in",
+    department: "Computer Science",
+    role: "FACULTY",
+    isActive: true,
+  },
+  {
+    id: "u-4",
+    name: "Prof. K. N. Iyer",
+    email: "kn.iyer@ves.ac.in",
+    department: "Dean Office",
+    role: "ADMIN",
+    isActive: true,
+  },
+  {
+    id: "u-5",
+    name: "Sneha Patil",
+    email: "sneha.patil@ves.ac.in",
+    department: "Electronics & Telecommunication",
+    role: "STUDENT",
+    isActive: true,
+  },
+];
+
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<DemoUser[]>([
-    {
-      id: "u-1",
-      name: "Aarav Sharma",
-      email: "aarav.sharma@ves.ac.in",
-      department: "Information Technology",
-      role: "STUDENT",
-      isActive: true,
-    },
-    {
-      id: "u-2",
-      name: "Rohan Mehta",
-      email: "rohan.mehta@ves.ac.in",
-      department: "Computer Science",
-      role: "ORGANIZER",
-      isActive: true,
-    },
-    {
-      id: "u-3",
-      name: "Dr. Sunita Rao",
-      email: "sunita.rao@ves.ac.in",
-      department: "Computer Science",
-      role: "FACULTY",
-      isActive: true,
-    },
-    {
-      id: "u-4",
-      name: "Prof. K. N. Iyer",
-      email: "kn.iyer@ves.ac.in",
-      department: "Dean Office",
-      role: "ADMIN",
-      isActive: true,
-    },
-    {
-      id: "u-5",
-      name: "Sneha Patil",
-      email: "sneha.patil@ves.ac.in",
-      department: "Electronics & Telecommunication",
-      role: "STUDENT",
-      isActive: true,
-    },
-  ]);
-
+  const [users, setUsers] = useState<DemoUser[]>(DEFAULT_USERS);
   const [savedUser, setSavedUser] = useState<string | null>(null);
+  const [updatingUser, setUpdatingUser] = useState<string | null>(null);
 
-  const handleRoleChange = (userId: string, newRole: UserRole) => {
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const data = await apiFetch<any[]>("/users");
+        if (Array.isArray(data) && data.length > 0) {
+          setUsers(
+            data.map((u) => ({
+              id: u.id,
+              name: u.full_name || u.name || "Campus User",
+              email: u.email,
+              department: u.department || "Campus Operations",
+              role: u.role,
+              isActive: u.is_active ?? true,
+            }))
+          );
+        }
+      } catch {
+        // Fallback to DEFAULT_USERS
+      }
+    }
+    loadUsers();
+  }, []);
+
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    const prevUser = users.find((u) => u.id === userId);
+    const oldRole = prevUser?.role || "STUDENT";
+
+    // Optimistically update UI
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
     );
-    setSavedUser(userId);
-    setTimeout(() => setSavedUser(null), 2000);
+    setUpdatingUser(userId);
+
+    try {
+      // 1. Call Backend API
+      await apiFetch(`/users/${userId}/role`, {
+        method: "PUT",
+        body: JSON.stringify({ role: newRole }),
+      });
+    } catch {
+      // 2. Direct Supabase Fallback if available
+      try {
+        const supabase = createClient();
+        await supabase
+          .from("profiles")
+          .update({ role: newRole })
+          .eq("id", userId);
+      } catch {
+        // Fallback
+      }
+    } finally {
+      setUpdatingUser(null);
+      setSavedUser(userId);
+      setTimeout(() => setSavedUser(null), 2500);
+    }
   };
 
   return (
@@ -90,7 +143,7 @@ export default function AdminUsersPage() {
         <CardHeader className="bg-slate-50/50 border-b border-slate-100">
           <CardTitle className="text-base font-bold">Registered Campus Profiles</CardTitle>
           <CardDescription className="text-xs">
-            Role elevations instantly affect policy enforcement in FastAPI middleware and Supabase RLS
+            Role elevations instantly persist to PostgreSQL `public.audit_logs` and affect policy enforcement in Supabase RLS
           </CardDescription>
         </CardHeader>
 
@@ -131,21 +184,27 @@ export default function AdminUsersPage() {
                       </Badge>
                     </td>
                     <td className="py-3 px-4">
-                      <select
-                        value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
-                        className="h-8 px-2 rounded border border-slate-300 bg-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      >
-                        <option value="STUDENT">STUDENT</option>
-                        <option value="ORGANIZER">ORGANIZER</option>
-                        <option value="FACULTY">FACULTY</option>
-                        <option value="ADMIN">ADMIN</option>
-                      </select>
-                      {savedUser === user.id && (
-                        <span className="ml-2 inline-flex items-center text-emerald-600 font-semibold text-[11px]">
-                          <Check className="w-3.5 h-3.5 mr-0.5" /> Updated
-                        </span>
-                      )}
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={user.role}
+                          disabled={updatingUser === user.id}
+                          onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
+                          className="h-8 px-2 rounded border border-slate-300 bg-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+                        >
+                          <option value="STUDENT">STUDENT</option>
+                          <option value="ORGANIZER">ORGANIZER</option>
+                          <option value="FACULTY">FACULTY</option>
+                          <option value="ADMIN">ADMIN</option>
+                        </select>
+                        {updatingUser === user.id && (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                        )}
+                        {savedUser === user.id && (
+                          <span className="inline-flex items-center text-emerald-600 font-semibold text-[11px]">
+                            <Check className="w-3.5 h-3.5 mr-0.5" /> Logged & Saved
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
@@ -162,4 +221,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-

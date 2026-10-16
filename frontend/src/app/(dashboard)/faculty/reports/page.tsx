@@ -49,11 +49,12 @@ export default function FacultyReportsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Faculty_Report_${title.slice(0, 15).replace(/\s+/g, "_")}.csv`;
+      const cleanTitle = title.slice(0, 20).replace(/[^a-zA-Z0-9_-]/g, "_");
+      a.download = `Faculty_Report_${cleanTitle}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(url);
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (err: unknown) {
       alert((err as Error).message || "CSV report download failed");
     } finally {

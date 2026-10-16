@@ -33,6 +33,8 @@ export interface EventItem {
   registration_deadline: string;
   max_capacity: number;
   current_capacity: number;
+  total_attended?: number;
+  turnout_rate?: number;
   status: EventStatus;
   rejection_reason?: string;
   ai_generated_tags: string[];
@@ -54,7 +56,9 @@ export interface RegistrationItem {
   created_at: string;
   event_title?: string;
   event_start_time?: string;
+  event_end_time?: string;
   event_location?: string;
+  event_department?: string;
   user_name?: string;
   user_email?: string;
 }

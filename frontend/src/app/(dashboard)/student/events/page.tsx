@@ -13,6 +13,7 @@ import ReactMarkdown from "react-markdown";
 
 export default function StudentEventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [registeredEventIds, setRegisteredEventIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDept, setSelectedDept] = useState("ALL");
   const [registeringId, setRegisteringId] = useState<string | null>(null);
@@ -23,8 +24,14 @@ export default function StudentEventsPage() {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const data = await apiFetch<EventItem[]>("/events");
+        const [data, passes] = await Promise.all([
+          apiFetch<EventItem[]>("/events"),
+          apiFetch<any[]>("/registrations/me").catch(() => []),
+        ]);
         setEvents(data);
+        if (Array.isArray(passes)) {
+          setRegisteredEventIds(new Set(passes.map((p: any) => p.event_id)));
+        }
       } catch {
         // Fallback demo events
         setEvents([
@@ -77,6 +84,8 @@ export default function StudentEventsPage() {
         method: "POST",
       });
       setSuccessMsg("Registration successful! Your digital HMAC QR ticket pass is ready.");
+      // Mark as registered immediately so button goes away!
+      setRegisteredEventIds((prev) => new Set([...prev, eventId]));
       // Increment local capacity
       setEvents((prev) =>
         prev.map((ev) =>
@@ -84,7 +93,11 @@ export default function StudentEventsPage() {
         )
       );
     } catch (err: unknown) {
-      setErrorMsg((err as Error).message || "Registration failed");
+      const msg = (err as Error).message || "Registration failed";
+      setErrorMsg(msg);
+      if (msg.toLowerCase().includes("already registered")) {
+        setRegisteredEventIds((prev) => new Set([...prev, eventId]));
+      }
     } finally {
       setRegisteringId(null);
     }
@@ -165,86 +178,108 @@ export default function StudentEventsPage() {
             Math.round((event.current_capacity / event.max_capacity) * 100)
           );
 
-          return (
-            <Card key={event.id} className="flex flex-col justify-between hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between mb-1">
-                  <Badge variant="outline" className="text-xs font-semibold bg-slate-50">
-                    {event.department}
-                  </Badge>
-                  <Badge variant={isFull ? "destructive" : "secondary"} className="text-xs">
-                    {isFull ? "Waitlist Only" : `${event.max_capacity - event.current_capacity} Seats Left`}
-                  </Badge>
-                </div>
-                <CardTitle className="text-lg font-bold text-slate-900">{event.title}</CardTitle>
-                <div className="line-clamp-3 text-xs mt-1 text-slate-600">
-                  <ReactMarkdown
-                    components={{
-                      p: ({ ...props }) => <span {...props} />,
-                      h1: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
-                      h2: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
-                      h3: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
-                    }}
-                  >
-                    {event.description}
-                  </ReactMarkdown>
-                </div>
-              </CardHeader>
+              const isRegistered = registeredEventIds.has(event.id);
 
-              <CardContent className="space-y-3 text-xs text-slate-600">
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>{new Date(event.start_time).toLocaleString()}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>{event.venue_name || "Campus Auditorium"}</span>
-                </div>
+              return (
+                <Card key={event.id} className="flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center space-x-1.5">
+                        <Badge variant="outline" className="text-xs font-semibold bg-slate-50">
+                          {event.department}
+                        </Badge>
+                        {isRegistered && (
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[11px] font-semibold flex items-center space-x-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 mr-0.5" />
+                            Registered
+                          </Badge>
+                        )}
+                      </div>
+                      <Badge variant={isFull ? "destructive" : "secondary"} className="text-xs">
+                        {isFull ? "Waitlist Only" : `${event.max_capacity - event.current_capacity} Seats Left`}
+                      </Badge>
+                    </div>
+                    <CardTitle className="text-lg font-bold text-slate-900">{event.title}</CardTitle>
+                    <div className="line-clamp-3 text-xs mt-1 text-slate-600">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ ...props }) => <span {...props} />,
+                          h1: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
+                          h2: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
+                          h3: ({ ...props }) => <strong className="font-semibold text-slate-800 mr-1" {...props} />,
+                        }}
+                      >
+                        {event.description}
+                      </ReactMarkdown>
+                    </div>
+                  </CardHeader>
 
-                {/* Capacity Progress Bar */}
-                <div className="space-y-1 pt-1">
-                  <div className="flex justify-between text-[11px] text-slate-500">
-                    <span>Capacity: {event.current_capacity} / {event.max_capacity}</span>
-                    <span>{capacityPct}%</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${isFull ? "bg-amber-500" : "bg-blue-600"}`}
-                      style={{ width: `${capacityPct}%` }}
-                    />
-                  </div>
-                </div>
+                  <CardContent className="space-y-3 text-xs text-slate-600">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>{new Date(event.start_time).toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>{event.venue_name || "Campus Auditorium"}</span>
+                    </div>
 
-                {event.ai_generated_tags && event.ai_generated_tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {event.ai_generated_tags.map((tag, idx) => (
-                      <span key={idx} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px]">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
+                    {/* Capacity Progress Bar */}
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[11px] text-slate-500">
+                        <span>Capacity: {event.current_capacity} / {event.max_capacity}</span>
+                        <span>{capacityPct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${isFull ? "bg-amber-500" : "bg-blue-600"}`}
+                          style={{ width: `${capacityPct}%` }}
+                        />
+                      </div>
+                    </div>
 
-              <CardFooter className="pt-2 border-t border-slate-100 flex items-center space-x-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedEventDetails(event)}
-                  className="text-xs text-slate-700 hover:bg-slate-100 flex items-center shrink-0"
-                >
-                  <Info className="w-3.5 h-3.5 mr-1 text-slate-500" />
-                  Details
-                </Button>
-                <Button
-                  onClick={() => handleRegister(event.id)}
-                  disabled={registeringId === event.id}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
-                >
-                  {registeringId === event.id ? "Processing..." : isFull ? "Join Waitlist" : "Register with 1-Click"}
-                </Button>
-              </CardFooter>
+                    {event.ai_generated_tags && event.ai_generated_tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {event.ai_generated_tags.map((tag, idx) => (
+                          <span key={idx} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px]">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+
+                  <CardFooter className="pt-2 border-t border-slate-100 flex items-center space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedEventDetails(event)}
+                      className="text-xs text-slate-700 hover:bg-slate-100 flex items-center shrink-0"
+                    >
+                      <Info className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                      Details
+                    </Button>
+                    {isRegistered ? (
+                      <Link href="/student/my-passes" className="flex-1">
+                        <Button
+                          variant="outline"
+                          className="w-full border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold text-xs flex items-center justify-center space-x-1"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mr-1" />
+                          <span>Registered • View Pass</span>
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button
+                        onClick={() => handleRegister(event.id)}
+                        disabled={registeringId === event.id}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
+                      >
+                        {registeringId === event.id ? "Processing..." : isFull ? "Join Waitlist" : "Register with 1-Click"}
+                      </Button>
+                    )}
+                  </CardFooter>
             </Card>
           );
         })}
@@ -311,17 +346,29 @@ export default function StudentEventsPage() {
               >
                 Close
               </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  handleRegister(selectedEventDetails.id);
-                  setSelectedEventDetails(null);
-                }}
-                disabled={registeringId === selectedEventDetails.id}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
-              >
-                Register for Event
-              </Button>
+              {registeredEventIds.has(selectedEventDetails.id) ? (
+                <Link href="/student/my-passes">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center space-x-1"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                    <span>Registered • View Pass</span>
+                  </Button>
+                </Link>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    handleRegister(selectedEventDetails.id);
+                    setSelectedEventDetails(null);
+                  }}
+                  disabled={registeringId === selectedEventDetails.id}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs"
+                >
+                  Register for Event
+                </Button>
+              )}
             </div>
           </div>
         </div>

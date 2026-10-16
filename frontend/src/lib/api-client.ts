@@ -1,4 +1,12 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+export function getApiBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    // If running in browser under a tunnel (https://) or non-localhost, proxy through Next.js rewrite
+    if (!window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1")) {
+      return "/api/v1";
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+}
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -30,7 +38,8 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
   const response = await fetch(url, {
     ...options,
     headers,

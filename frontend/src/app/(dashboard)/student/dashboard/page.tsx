@@ -124,54 +124,69 @@ export default function StudentDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {events.slice(0, 3).map((event) => (
-            <Card key={event.id} className="hover:shadow-md transition-shadow flex flex-col justify-between">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between mb-1">
-                  <Badge variant="secondary" className="text-xs font-semibold">
-                    {event.department}
-                  </Badge>
-                  <span className="text-xs text-slate-500">
-                    {event.current_capacity} / {event.max_capacity} Seats
-                  </span>
-                </div>
-                <CardTitle className="text-lg font-bold text-slate-900 leading-snug">
-                  {event.title}
-                </CardTitle>
-                <div className="line-clamp-2 text-xs mt-1 text-slate-500">
-                  <ReactMarkdown
-                    components={{
-                      p: ({ ...props }) => <span {...props} />,
-                      h1: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
-                      h2: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
-                      h3: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
-                    }}
-                  >
-                    {event.description}
-                  </ReactMarkdown>
-                </div>
-              </CardHeader>
+          {events.slice(0, 3).map((event) => {
+            const isRegistered = passes.some((p) => p.event_id === event.id);
+            return (
+              <Card key={event.id} className="hover:shadow-md transition-shadow flex flex-col justify-between">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center space-x-1.5">
+                      <Badge variant="secondary" className="text-xs font-semibold">
+                        {event.department}
+                      </Badge>
+                      {isRegistered && (
+                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-semibold">
+                          Registered
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {event.current_capacity} / {event.max_capacity} Seats
+                    </span>
+                  </div>
+                  <CardTitle className="text-lg font-bold text-slate-900 leading-snug">
+                    {event.title}
+                  </CardTitle>
+                  <div className="line-clamp-2 text-xs mt-1 text-slate-500">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ ...props }) => <span {...props} />,
+                        h1: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
+                        h2: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
+                        h3: ({ ...props }) => <strong className="font-semibold text-slate-700 mr-1" {...props} />,
+                      }}
+                    >
+                      {event.description}
+                    </ReactMarkdown>
+                  </div>
+                </CardHeader>
 
-              <CardContent className="space-y-2 text-xs text-slate-600 pb-4">
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-3.5 h-3.5 text-blue-600" />
-                  <span>{new Date(event.start_time).toLocaleDateString()}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                  <span>{event.venue_name || "Campus Auditorium"}</span>
-                </div>
-              </CardContent>
+                <CardContent className="space-y-2 text-xs text-slate-600 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{new Date(event.start_time).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{event.venue_name || "Campus Auditorium"}</span>
+                  </div>
+                </CardContent>
 
-              <div className="p-4 pt-0">
-                <Link href="/student/events">
-                  <Button variant="outline" className="w-full text-xs font-semibold">
-                    View & Register
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-          ))}
+                <div className="p-4 pt-0">
+                  <Link href={isRegistered ? "/student/my-passes" : "/student/events"}>
+                    <Button
+                      variant="outline"
+                      className={`w-full text-xs font-semibold ${
+                        isRegistered ? "border-emerald-500 text-emerald-700 hover:bg-emerald-50" : ""
+                      }`}
+                    >
+                      {isRegistered ? "Registered • View Pass" : "View & Register"}
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </div>

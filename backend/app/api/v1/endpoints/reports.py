@@ -6,6 +6,7 @@ from app.models.schemas import (
     EventAttendanceReport,
     AttendanceReportItem,
     RegistrationStatus,
+    EventStatus,
     UserPayload,
     UserRole
 )
@@ -24,22 +25,26 @@ async def get_event_attendance_report(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if current_user.role == UserRole.ORGANIZER and event.get("organizer_id") != current_user.id:
-        raise HTTPException(status_code=403, detail="You can only view reports for your own events")
+    if (
+        current_user.role == UserRole.ORGANIZER
+        and event.get("status") != EventStatus.APPROVED.value
+        and event.get("organizer_id") != current_user.id
+    ):
+        raise HTTPException(status_code=403, detail="You can only view reports for your own events or approved campus events")
 
     attendees_data = await supabase_service.list_event_attendees(event_id)
     total_reg = len(attendees_data)
-    total_att = sum(1 for a in attendees_data if a["attended"])
+    total_att = sum(1 for a in attendees_data if a.get("attended"))
     rate = round((total_att / total_reg * 100), 2) if total_reg > 0 else 0.0
 
     items = [
         AttendanceReportItem(
-            student_name=f"Student {a['user_id'][:6]}",
-            student_email=f"user_{a['user_id'][:6]}@ves.ac.in",
-            department=event.get("department"),
+            student_name=a.get("student_name") or f"Student {a['user_id'][:6]}",
+            student_email=a.get("student_email") or f"user_{a['user_id'][:6]}@ves.ac.in",
+            department=a.get("department") or event.get("department"),
             status=RegistrationStatus(a["status"]),
-            attended=a["attended"],
-            marked_at=a["marked_at"]
+            attended=bool(a.get("attended")),
+            marked_at=a.get("marked_at")
         )
         for a in attendees_data
     ]
@@ -78,9 +83,10 @@ async def export_attendance_csv(
         ])
     
     output.seek(0)
+    safe_title = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in report.event_title[:20])
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=Attendance_{report.event_title[:15].replace(' ', '_')}.csv"}
+        headers={"Content-Disposition": f"attachment; filename=Attendance_{safe_title}.csv"}
     )
 

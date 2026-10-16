@@ -137,6 +137,8 @@ class EventResponse(BaseModel):
     registration_deadline: datetime
     max_capacity: int
     current_capacity: int = 0
+    total_attended: Optional[int] = 0
+    turnout_rate: Optional[float] = 0.0
     status: EventStatus
     rejection_reason: Optional[str] = None
     ai_generated_tags: List[str] = []
@@ -169,7 +171,9 @@ class RegistrationResponse(BaseModel):
     
     event_title: Optional[str] = None
     event_start_time: Optional[datetime] = None
+    event_end_time: Optional[datetime] = None
     event_location: Optional[str] = None
+    event_department: Optional[str] = None
     user_name: Optional[str] = None
     user_email: Optional[str] = None
 
