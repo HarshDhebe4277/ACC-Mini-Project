@@ -14,6 +14,7 @@ sa-key.json
 *.pem
 secrets.yaml
 k8s/**/secrets.yaml
+.last_deploy
 
 # Python
 backend/.venv/

@@ -2,72 +2,136 @@
 .SYNOPSIS
     Automated Continuous Deployment Watcher for Minikube
 .DESCRIPTION
-    Polls GitHub repository for new commits.
-    When a new commit is detected on 'main', it pulls latest changes, waits for GitHub Actions
-    to finish publishing the new container image to GHCR (or builds locally if -LocalBuild is set),
-    and triggers a zero-downtime rolling update in Minikube.
+    Monitors GitHub commits on origin/main.
+    When a new commit is detected, it polls GitHub Actions until the cloud build
+    and test pipeline finishes successfully, pulls the images from GHCR,
+    and triggers a zero-downtime rolling update.
 #>
 
 [CmdletBinding()]
 param(
     [string]$Branch = "main",
-    [int]$PollIntervalSeconds = 15,
-    [switch]$LocalBuild
+    [int]$PollIntervalSeconds = 10,
+    [switch]$LocalBuild,
+    [switch]$ForceDeploy
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
+if (Test-Path Variable:\PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+$StateFile = Join-Path $PSScriptRoot "..\.last_deploy"
 
-Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  Minikube CI/CD Continuous Deployment Watcher" -ForegroundColor Cyan
-Write-Host "==========================================================" -ForegroundColor Cyan
+function Wait-ForGitHubActions {
+    param([string]$CommitSha, [int]$TimeoutSeconds = 600)
+    
+    Write-Host "[GHCR mode] Actively tracking GitHub Actions cloud build for commit $CommitSha..." -ForegroundColor Cyan
+    $Elapsed = 0
+    $CheckInterval = 10
 
-# Verify Minikube is running
-Write-Host "Verifying Minikube cluster is reachable..." -ForegroundColor Yellow
-try {
-    minikube status | Out-Null
-    Write-Host "[OK] Connected to Minikube" -ForegroundColor Green
-} catch {
-    Write-Warning "Could not connect to Minikube. Ensure Minikube is started (minikube start)."
+    while ($Elapsed -lt $TimeoutSeconds) {
+        $apiSuccess = $false
+        try {
+            $uri = "https://api.github.com/repos/HarshDhebe4277/ACC-Mini-Project/actions/runs?head_sha=$CommitSha"
+            $resp = Invoke-RestMethod -Uri $uri -Headers @{ "User-Agent" = "PowerShell-Watcher" } -TimeoutSec 5 -ErrorAction Stop
+            $runs = $resp.workflow_runs
+            
+            if ($runs -and $runs.Count -gt 0) {
+                $apiSuccess = $true
+                $completed = @($runs | Where-Object { $_.status -eq "completed" })
+                $inProgress = @($runs | Where-Object { $_.status -ne "completed" })
+                
+                if ($inProgress.Count -eq 0 -and $completed.Count -gt 0) {
+                    $failed = @($completed | Where-Object { $_.conclusion -ne "success" })
+                    if ($failed.Count -gt 0) {
+                        Write-Warning "GitHub Actions workflow failed: $($failed.name -join ', ')"
+                        return $false
+                    }
+                    Write-Host "[GitHub Actions] Cloud tests and image build finished successfully! (${Elapsed}s)" -ForegroundColor Green
+                    return $true
+                } else {
+                    Write-Host "  > Build in progress on GitHub Actions... (${Elapsed}s elapsed)" -ForegroundColor Gray
+                }
+            }
+        } catch {
+            # Network issue or rate limit
+        }
+
+        if (-not $apiSuccess) {
+            if ($Elapsed -ge 180) {
+                Write-Host "  > Proceeding to pull from GHCR (${Elapsed}s elapsed)..." -ForegroundColor Yellow
+                return $true
+            } else {
+                Write-Host "  > Waiting for cloud build to finish... (${Elapsed}s elapsed)" -ForegroundColor Gray
+            }
+        }
+
+        Start-Sleep -Seconds $CheckInterval
+        $Elapsed += $CheckInterval
+    }
+
+    Write-Warning "Timed out waiting for GitHub Actions. Proceeding to attempt pull."
+    return $true
 }
 
-Write-Host "Watching for new commits on '$Branch' every $PollIntervalSeconds seconds..." -ForegroundColor Cyan
+Write-Host "==========================================================" -ForegroundColor Cyan
+Write-Host "    Minikube Continuous Deployment (CD) Watcher           " -ForegroundColor Cyan
+Write-Host "==========================================================" -ForegroundColor Cyan
+
+# Load last deployed commit
+$LastDeployed = ""
+if (Test-Path $StateFile) {
+    $LastDeployed = (Get-Content $StateFile -Raw).Trim()
+}
+
+Write-Host "Last deployed commit: $(if ($LastDeployed) { $LastDeployed } else { 'None (Initial Run)' })" -ForegroundColor Gray
+Write-Host "Watching GitHub for new commits on '$Branch' every $PollIntervalSeconds seconds..." -ForegroundColor Cyan
 
 while ($true) {
     try {
-        # Fetch remote updates silently
-        git fetch origin $Branch 2>$null | Out-Null
-        $LOCAL = (git rev-parse HEAD).Trim()
-        $REMOTE = (git rev-parse "origin/$Branch").Trim()
+        # Fetch latest commit from origin silently
+        git fetch origin $Branch --quiet *>$null
+        $CurrentRemote = (git rev-parse "origin/$Branch" 2>$null).Trim()
 
-        if ($LOCAL -ne $REMOTE) {
-            Write-Host "`n[CI/CD Event] New commit detected on GitHub: $REMOTE" -ForegroundColor Yellow
-            Write-Host "Pulling latest changes..." -ForegroundColor Yellow
-            git pull origin $Branch
+        if ($CurrentRemote -ne $LastDeployed -or $ForceDeploy) {
+            $ForceDeploy = $false
+            Write-Host "`n[CI/CD Trigger] New release detected on GitHub: $CurrentRemote" -ForegroundColor Yellow
 
             if ($LocalBuild) {
-                Write-Host "[-LocalBuild mode] Rebuilding images with Docker and loading into Minikube..." -ForegroundColor Cyan
+                Write-Host "[-LocalBuild mode] Building images with Docker and loading into Minikube..." -ForegroundColor Cyan
                 docker build -t ghcr.io/harshdhebe4277/acc-mini-project/backend:latest ./backend
                 minikube image load ghcr.io/harshdhebe4277/acc-mini-project/backend:latest
                 docker build -t ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest ./frontend
                 minikube image load ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest
             } else {
-                Write-Host "[GHCR mode] Waiting 90s for GitHub Actions to build and publish images to ghcr.io..." -ForegroundColor Cyan
-                Start-Sleep -Seconds 90
+                $buildOk = Wait-ForGitHubActions -CommitSha $CurrentRemote
+                if (-not $buildOk) {
+                    Write-Error "Deployment cancelled because GitHub Actions build failed."
+                    continue
+                }
+
+                Write-Host "Pulling fresh images from GHCR into Minikube..." -ForegroundColor Cyan
+                minikube image pull ghcr.io/harshdhebe4277/acc-mini-project/backend:latest
+                minikube image pull ghcr.io/harshdhebe4277/acc-mini-project/frontend:latest
             }
 
-            Write-Host "Triggering Kubernetes zero-downtime rolling restart from GHCR..." -ForegroundColor Cyan
+            Write-Host "Triggering Kubernetes zero-downtime rolling restart..." -ForegroundColor Cyan
             kubectl rollout restart deployment/backend-deployment -n campus-events
             kubectl rollout restart deployment/frontend-deployment -n campus-events
 
-            Write-Host "Monitoring rollout status (pulling fresh images from ghcr.io)..." -ForegroundColor Yellow
+            Write-Host "Monitoring rollout status..." -ForegroundColor Yellow
             kubectl rollout status deployment/backend-deployment -n campus-events --timeout=180s
             kubectl rollout status deployment/frontend-deployment -n campus-events --timeout=180s
 
-            Write-Host "`n[SUCCESS] Rolling deployment complete! Running commit: $REMOTE" -ForegroundColor Green
-            Write-Host "----------------------------------------------------------"
+            # Save state
+            Set-Content -Path $StateFile -Value $CurrentRemote -Force
+            $LastDeployed = $CurrentRemote
+
+            Write-Host "`n[SUCCESS] Deployed commit: $CurrentRemote to Minikube!" -ForegroundColor Green
+            Write-Host "==========================================================" -ForegroundColor Cyan
         }
     } catch {
-        Write-Warning "Watcher notice: $_"
+        Write-Warning "Watcher note: $_"
     }
 
     Start-Sleep -Seconds $PollIntervalSeconds
